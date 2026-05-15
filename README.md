@@ -1,61 +1,40 @@
-# Starter Kit for Vite, React, TypeScript & Tailwind
+# Codiff
 
-_Minimal, sensible defaults, fast._
+Codiff is a local PR viewer for reviewing staged and unstaged Git changes before
+committing.
 
-Read [the blog post about this template](https://cpojer.net/posts/fastest-frontend-tooling-in-2022).
+## Usage
 
-<img src="https://github.com/user-attachments/assets/63982227-510b-4376-a780-7db997026c4a" width="49%" />
-<img src="https://github.com/user-attachments/assets/89b936b0-0fab-43e0-a1f2-97a800e14378" width="49%" />
-
-## Technologies
-
-- [Vite](https://vitejs.dev/)
-- [React](https://reactjs.org/) with [React Compiler](https://react.dev/learn/react-compiler) enabled
-- [Tailwind](https://tailwindcss.com/)
-- [fbtee](https://github.com/nkzw-tech/fbtee) for i18n
-- [Better Auth](https://www.better-auth.com/) for authentication
-- [React Router](https://reactrouter.com/)
-- [TypeScript](https://www.typescriptlang.org)
-- [pnpm](https://pnpm.io/)
-- _(Optional)_ [Relay](https://relay.dev/) for data fetching -> check out the [`with-relay` branch](https://github.com/nkzw-tech/web-app-template/tree/with-relay).
-
-Check out the [`nkzw-tech/server-template`](https://github.com/nkzw-tech/server-template) for a GraphQL based server with Pothos and Prisma, or the [`nkzw-tech/expo-app-template`](https://github.com/nkzw-tech/expo-app-template) for building mobile apps.
-
-## Setup
-
-- Press the "Use this template" button on the top of this repository's GitHub page.
-- Run `pnpm install` (or `npm install` if you don't use `pnpm`).
-- Run `pnpm dev:setup`.
-- `pnpm dev` for development.
-- Use `pnpm test` to run tests.
-- `pnpm build` for production builds.
-
-_Note: You can install `pnpm` via `homebrew` on macOS: `brew install pnpm`._
-
-## Protips for the fastest Developer Experience
-
-- Use [`npm-run-all2`](https://github.com/bcomnes/npm-run-all2) to parallelize local test runs.
-- Use `oxlint` for linting and `oxfmt` for formatting.
-- Use `swc` with `ts-node` for fast node scripts with [ESM](https://hacks.mozilla.org/2018/03/es-modules-a-cartoon-deep-dive/). See below ↓
-
-## I'm not using Better Auth
-
-You can simply remove everything related to Better Auth in the `src/user` directory.
-
-## Run node scripts with ESM and TypeScript, fast.
-
-Create a `script.ts` file, run `chmod x script.ts` and execute it via `./script.ts`.
-
-```
-#!/usr/bin/env node --no-warnings --experimental-specifier-resolution=node --loader ts-node/esm
-
-console.log('Your code goes here.');
+```bash
+pnpm install
+pnpm build
+pnpm codiff
 ```
 
-Use this to restart your scripts instantly when a file changes:
+Run it from any Git repository, or pass a path:
 
+```bash
+pnpm codiff /path/to/repository
 ```
-#!/usr/bin/env NODE_ENV=development node --watch --no-warnings --experimental-specifier-resolution=node --loader ts-node/esm
 
-console.log('This processes instantly restarts when a file changes.');
+The packaged CLI is named `codiff`. Launching it in multiple repositories opens
+a separate native window for each repository.
+
+The renderer talks to a source-based repository API. The first UI uses the
+`working-tree` source for staged and unstaged changes; the Electron bridge also
+has commit history and commit-diff sources ready for the later history picker.
+
+## Development
+
+```bash
+pnpm dev
+ELECTRON_RENDERER_URL=http://127.0.0.1:5173 pnpm electron
+```
+
+Useful checks:
+
+```bash
+pnpm check
+pnpm test
+pnpm build
 ```

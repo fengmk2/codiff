@@ -1,4 +1,3 @@
-import fbteePreset from '@nkzw/babel-preset-fbtee';
 import nkzw from '@nkzw/oxlint-config';
 import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
@@ -6,6 +5,7 @@ import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
+  base: './',
   fmt: {
     experimentalSortImports: {
       newlinesBetween: false,
@@ -28,12 +28,12 @@ export default defineConfig({
   },
   lint: {
     extends: [nkzw],
-    ignorePatterns: ['dist/', 'vite.config.ts.timestamp-*'],
+    ignorePatterns: ['bin/', 'dist/', 'electron/', 'vite.config.ts.timestamp-*'],
     options: { typeAware: true, typeCheck: true },
   },
   plugins: [
     babel({
-      presets: [fbteePreset, reactCompilerPreset()],
+      presets: [reactCompilerPreset()],
     }),
     tailwindcss(),
     react(),

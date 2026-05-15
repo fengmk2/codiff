@@ -1,28 +1,32 @@
 {
-  "name": "@nkzw/web-app-template",
+  "name": "codiff",
   "version": "0.0.1",
   "author": "Christoph Nakazawa <christoph.pojer@gmail.com>",
   "repository": {
     "type": "git",
-    "url": "git://github.com/nkzw-tech/web-app-template.git"
+    "url": "git://github.com/cpojer/codiff.git"
+  },
+  "bin": {
+    "codiff": "./bin/codiff.js"
   },
   "type": "module",
+  "main": "./electron/main.cjs",
   "scripts": {
-    "dev:setup": "vp run fbtee:all",
-    "fbtee:all": "vpx fbtee collect && vpx fbtee translate",
-    "prepare": "vp config"
+    "build": "vp build",
+    "check": "vp check",
+    "codiff": "node ./bin/codiff.js",
+    "dev": "vp dev --host 127.0.0.1",
+    "electron": "electron .",
+    "prepare": "vp config",
+    "test": "vp test"
   },
   "dependencies": {
-    "@nkzw/define-env": "^1.1.0",
-    "@nkzw/stack": "^2.3.2",
-    "better-auth": "^1.6.11",
-    "fbtee": "^1.7.6",
+    "@pierre/diffs": "^1.1.22",
+    "@pierre/trees": "1.0.0-beta.3",
     "react": "^19.2.6",
-    "react-dom": "^19.2.6",
-    "react-router": "^7.15.0"
+    "react-dom": "^19.2.6"
   },
   "devDependencies": {
-    "@nkzw/babel-preset-fbtee": "^1.7.6",
     "@nkzw/eslint-plugin": "^2.0.0",
     "@nkzw/oxlint-config": "^1.2.1",
     "@rolldown/plugin-babel": "^0.2.3",
@@ -34,6 +38,7 @@
     "@typescript/native-preview": "7.0.0-dev.20260514.1",
     "@vitejs/plugin-react": "^6.0.2",
     "babel-plugin-react-compiler": "^1.0.0",
+    "electron": "^42.0.1",
     "eslint-plugin-no-only-tests": "^3.4.0",
     "eslint-plugin-perfectionist": "^5.9.0",
     "eslint-plugin-react-hooks": "^7.1.1",

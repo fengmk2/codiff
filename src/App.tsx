@@ -1,136 +1,351 @@
-import Stack from '@nkzw/stack';
-import { useLocaleContext } from 'fbtee';
-import { AnchorHTMLAttributes, useTransition } from 'react';
-import { LinkProps, Link as ReactRouterLink, Route, Routes } from 'react-router';
-import AvailableLanguages from './AvailableLanguages.tsx';
-import AuthClient from './user/AuthClient.tsx';
-import SignIn from './user/SignIn.tsx';
+import { registerCustomTheme } from '@pierre/diffs';
+import { PatchDiff, Virtualizer } from '@pierre/diffs/react';
+import { FileTree, useFileTree } from '@pierre/trees/react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import dunkelTheme from './themes/dunkel.json' with { type: 'json' };
+import lichtTheme from './themes/licht.json' with { type: 'json' };
+import type { ChangedFile, GitFileStatus, RepositoryState } from './types.ts';
 
-const cardClassName =
-  'squircle relative m-6 mx-auto w-[min(92vw,760px)] overflow-hidden border border-gray-200/70 bg-white/85 p-5 shadow-[0_16px_70px_-32px_rgba(15,23,42,0.45)] transition duration-200 ease-out hover:shadow-[0_24px_80px_-38px_rgba(15,23,42,0.55)] dark:border-neutral-800 dark:bg-neutral-900/80';
+registerCustomTheme('Licht', async () => lichtTheme as never);
+registerCustomTheme('Dunkel', async () => dunkelTheme as never);
 
-const codeClassName =
-  'squircle border border-input bg-background px-2 py-1 font-mono text-sm text-foreground shadow-sm dark:bg-neutral-900/40';
-
-const linkClassName =
-  'cursor-pointer text-primary underline decoration-foreground/30 underline-offset-4 select-none transition hover:decoration-foreground';
-
-const Link = ({ className, ...props }: LinkProps & AnchorHTMLAttributes<HTMLAnchorElement>) => (
-  <ReactRouterLink className={linkClassName + (className ? ` ${className}` : '')} {...props} />
-);
-
-const LocaleSwitcher = () => {
-  const [, startTransition] = useTransition();
-  const { locale, setLocale } = useLocaleContext();
-
-  return (
-    <div>
-      <a
-        className={linkClassName}
-        onClick={() => startTransition(() => setLocale(locale === 'ja_JP' ? 'en_US' : 'ja_JP'))}
-      >
-        {AvailableLanguages.get(locale)}
-      </a>
-    </div>
-  );
+const statusLabel: Record<GitFileStatus, string> = {
+  added: 'Added',
+  deleted: 'Deleted',
+  modified: 'Modified',
+  renamed: 'Renamed',
+  untracked: 'Untracked',
 };
 
-const Home = () => {
-  const { data: session } = AuthClient.useSession();
+const statusForTree: Record<
+  GitFileStatus,
+  'added' | 'deleted' | 'modified' | 'renamed' | 'untracked'
+> = {
+  added: 'added',
+  deleted: 'deleted',
+  modified: 'modified',
+  renamed: 'renamed',
+  untracked: 'untracked',
+};
+
+const hashString = (value: string) => {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash << 5) - hash + value.charCodeAt(index);
+    hash |= 0;
+  }
+  return Math.abs(hash);
+};
+
+const compactPath = (path: string) => {
+  const homePath = path
+    .replace(/^\/Users\/[^/]+(?=\/|$)/, '~')
+    .replace(/^\/home\/[^/]+(?=\/|$)/, '~');
+  const parts = homePath.split('/').filter(Boolean);
+
+  if (parts.length <= 2) {
+    return homePath;
+  }
+
+  const prefix = homePath.startsWith('/') ? '/' : '';
+  const [first, ...rest] = parts;
+  const last = rest.pop();
+  const middle = rest.map((part) => part[0]).join('/');
+
+  return `${prefix}${first}/${middle ? `${middle}/` : ''}${last}`;
+};
+
+const getViewedKey = (root: string) => `codiff:viewed:${root}`;
+
+const readViewed = (root: string): Record<string, string> => {
+  try {
+    return JSON.parse(localStorage.getItem(getViewedKey(root)) || '{}') as Record<string, string>;
+  } catch {
+    return {};
+  }
+};
+
+const writeViewed = (root: string, viewed: Record<string, string>) => {
+  localStorage.setItem(getViewedKey(root), JSON.stringify(viewed));
+};
+
+function Sidebar({
+  files,
+  onSelectPath,
+  root,
+  selectedPath,
+}: {
+  files: ReadonlyArray<ChangedFile>;
+  onSelectPath: (path: string) => void;
+  root: string;
+  selectedPath: string | null;
+}) {
+  const paths = useMemo(() => files.map((file) => file.path), [files]);
+  const status = useMemo(
+    () =>
+      files.map((file) => ({
+        path: file.path,
+        status: statusForTree[file.status],
+      })),
+    [files],
+  );
+  const { model } = useFileTree({
+    flattenEmptyDirectories: true,
+    gitStatus: status,
+    initialExpansion: 'open',
+    initialSelectedPaths: selectedPath ? [selectedPath] : [],
+    itemHeight: 30,
+    onSelectionChange: (paths) => {
+      const path = paths[0];
+      if (path) {
+        onSelectPath(path);
+      }
+    },
+    paths,
+    unsafeCSS: `
+      :host {
+        color: var(--sidebar-text);
+        font: 13px/1.35 var(--font-sans);
+      }
+
+      button[data-type='item'] {
+        border-radius: 14px;
+        corner-shape: squircle;
+      }
+    `,
+  });
 
   return (
-    <div className={cardClassName}>
-      <Stack alignCenter between gap>
-        <h1 className="text-4xl leading-tight font-semibold text-balance">
-          <fbt desc="Greeting">Welcome</fbt>
-        </h1>
-        <LocaleSwitcher />
-      </Stack>
-      <p className="my-4 text-muted-foreground">
-        <em>
-          <fbt desc="Tagline">Minimal, fast, sensible defaults.</fbt>
-        </em>
-      </p>
-      <p className="my-4 text-foreground/90">
-        <fbt desc="Template tools">
-          Using{' '}
-          <fbt:list
-            items={[
-              <Link key="vite" target="_blank" to="https://vitejs.dev/">
-                Vite
-              </Link>,
-              <Link key="react" target="_blank" to="https://reactjs.org/">
-                React
-              </Link>,
-              <Link key="typescript" target="_blank" to="https://www.typescriptlang.org/">
-                TypeScript
-              </Link>,
-              <Link key="tailwind" target="_blank" to="https://tailwindcss.com/">
-                Tailwind
-              </Link>,
-              <Link key="fbtee" target="_blank" to="https://github.com/nkzw-tech/fbtee">
-                fbtee
-              </Link>,
-              <Link key="better-auth" target="_blank" to="https://www.better-auth.com/">
-                Better Auth
-              </Link>,
-            ]}
-            name="tools"
-          />
-          .
-        </fbt>
-      </p>
-      <p className="my-4 text-foreground/90">
-        <fbt desc="Instructions">
-          Change <code className={codeClassName}>src/App.tsx</code> for live updates.
-        </fbt>
-      </p>
-      <div>
-        {session ? (
-          <Stack gap={12} vertical>
-            <div>
-              <fbt desc="User greeting">
-                Hello, <fbt:param name="name">{session.user.name}</fbt:param>
-              </fbt>
-            </div>
-            <div>
-              <a className={linkClassName} onClick={() => AuthClient.signOut()}>
-                <fbt desc="Logout button">Logout</fbt>
-              </a>
-            </div>
-          </Stack>
-        ) : (
-          <SignIn />
-        )}
+    <FileTree
+      className="file-tree"
+      header={
+        <div className="sidebar-header">
+          <div className="sidebar-path" title={root}>
+            {compactPath(root)}
+          </div>
+          <div className="sidebar-title">Changed Files</div>
+        </div>
+      }
+      model={model}
+    />
+  );
+}
+
+function DiffFile({
+  file,
+  isSelected,
+  isViewed,
+  onToggleViewed,
+}: {
+  file: ChangedFile;
+  isSelected: boolean;
+  isViewed: boolean;
+  onToggleViewed: (file: ChangedFile, isViewed: boolean) => void;
+}) {
+  const [isCollapsed, setIsCollapsed] = useState(false);
+  const toggleViewed = () => {
+    onToggleViewed(file, isViewed);
+    setIsCollapsed(!isViewed);
+  };
+
+  return (
+    <section
+      className={`diff-file squircle${isSelected ? ' selected' : ''}${isViewed ? ' viewed' : ''}`}
+      id={`file-${hashString(file.path)}`}
+    >
+      <div className="diff-file-header">
+        <button
+          aria-label={isCollapsed ? 'Expand file' : 'Collapse file'}
+          className="icon-button"
+          onClick={() => setIsCollapsed((value) => !value)}
+          title={isCollapsed ? 'Expand' : 'Collapse'}
+          type="button"
+        >
+          <span className={isCollapsed ? 'chevron collapsed' : 'chevron'} />
+        </button>
+        <div className="file-heading">
+          <div className="file-path">{file.path}</div>
+          {file.oldPath ? <div className="file-old-path">{file.oldPath}</div> : null}
+        </div>
+        <div className={`status-badge ${file.status}`}>{statusLabel[file.status]}</div>
+        <button
+          aria-pressed={isViewed}
+          className={`viewed-button${isViewed ? ' active' : ''}`}
+          onClick={toggleViewed}
+          type="button"
+        >
+          <span aria-hidden className="viewed-checkbox" />
+          Viewed
+        </button>
       </div>
-      <p className="my-4">
-        <Link to="/about">
-          <fbt desc="About link">About this template</fbt>
-        </Link>
-      </p>
-    </div>
+      {isCollapsed ? null : (
+        <div className="diff-sections">
+          {file.sections.map((section) => (
+            <div className="diff-section" key={section.id}>
+              {file.sections.length > 1 ? (
+                <div className="section-label">
+                  {section.kind === 'staged'
+                    ? 'Staged'
+                    : section.kind === 'unstaged'
+                      ? 'Unstaged'
+                      : 'Commit'}
+                </div>
+              ) : null}
+              {section.binary ? (
+                <div className="binary-diff squircle">Binary file changed</div>
+              ) : (
+                <Virtualizer>
+                  <PatchDiff
+                    options={{
+                      diffIndicators: 'bars',
+                      diffStyle: 'split',
+                      disableFileHeader: true,
+                      hunkSeparators: 'simple',
+                      lineDiffType: 'char',
+                      theme: {
+                        dark: 'Dunkel',
+                        light: 'Licht',
+                      },
+                      themeType: 'system',
+                    }}
+                    patch={section.patch}
+                  />
+                </Virtualizer>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </section>
   );
-};
-
-const About = () => (
-  <div className={cardClassName}>
-    <h1 className="text-4xl leading-tight font-semibold text-balance">
-      <fbt desc="About">About</fbt>
-    </h1>
-    <p className="my-4">🤘</p>
-    <p className="my-4">
-      <Link to="/">
-        <fbt desc="Back to home link">Home</fbt>
-      </Link>
-    </p>
-  </div>
-);
+}
 
 export default function App() {
+  const [state, setState] = useState<RepositoryState | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [selectedPath, setSelectedPath] = useState<string | null>(null);
+  const [viewed, setViewed] = useState<Record<string, string>>({});
+  const fileRefs = useRef(new Map<string, HTMLElement>());
+
+  useEffect(() => {
+    let canceled = false;
+
+    window.codiff
+      .getRepositoryState()
+      .then((nextState) => {
+        if (canceled) {
+          return;
+        }
+
+        setState(nextState);
+        setError(null);
+        setViewed(readViewed(nextState.root));
+        setSelectedPath((current) => current ?? nextState.files[0]?.path ?? null);
+      })
+      .catch((error: unknown) => {
+        if (!canceled) {
+          setError(error instanceof Error ? error.message : String(error));
+        }
+      });
+
+    return () => {
+      canceled = true;
+    };
+  }, []);
+
+  const selectPath = useCallback((path: string) => {
+    setSelectedPath(path);
+    requestAnimationFrame(() => {
+      fileRefs.current.get(path)?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    });
+  }, []);
+
+  const toggleViewed = useCallback(
+    (file: ChangedFile, isViewed: boolean) => {
+      if (!state) {
+        return;
+      }
+
+      setViewed((current) => {
+        if (isViewed) {
+          const next = { ...current };
+          delete next[file.path];
+          writeViewed(state.root, next);
+          return next;
+        }
+
+        const next = {
+          ...current,
+          [file.path]: file.fingerprint,
+        };
+        writeViewed(state.root, next);
+        return next;
+      });
+    },
+    [state],
+  );
+
+  if (error) {
+    return (
+      <main className="empty-state">
+        <div className="empty-panel squircle">
+          <strong>Unable to read repository</strong>
+          <span>{error}</span>
+        </div>
+      </main>
+    );
+  }
+
+  if (!state) {
+    return <main className="loading">Loading</main>;
+  }
+
   return (
-    <Routes>
-      <Route element={<Home />} path="/" />
-      <Route element={<About />} path="/about" />
-    </Routes>
+    <div className="app-shell">
+      <aside className="sidebar squircle">
+        <div className="window-drag" />
+        <Sidebar
+          files={state.files}
+          onSelectPath={selectPath}
+          root={state.root}
+          selectedPath={selectedPath}
+        />
+      </aside>
+      <main className="review">
+        {state.files.length === 0 ? (
+          <div className="empty-state">
+            <div className="empty-panel squircle">
+              <strong>No local changes</strong>
+              <span>{state.root}</span>
+            </div>
+          </div>
+        ) : (
+          <div className="file-list">
+            {state.files.map((file) => (
+              <div
+                key={file.path}
+                ref={(element) => {
+                  if (element) {
+                    fileRefs.current.set(file.path, element);
+                  } else {
+                    fileRefs.current.delete(file.path);
+                  }
+                }}
+              >
+                <DiffFile
+                  file={file}
+                  isSelected={selectedPath === file.path}
+                  isViewed={viewed[file.path] === file.fingerprint}
+                  onToggleViewed={toggleViewed}
+                />
+              </div>
+            ))}
+          </div>
+        )}
+      </main>
+    </div>
   );
 }
