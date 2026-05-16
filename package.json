@@ -17,13 +17,11 @@
   "type": "module",
   "main": "./electron/main.cjs",
   "scripts": {
-    "build": "vp build",
-    "check": "vp check",
     "codiff": "node ./bin/codiff.js",
     "dev": "vp dev --host 127.0.0.1",
     "electron": "electron .",
-    "link:global": "pnpm build && pnpm add --global \"$PWD\"",
-    "prepack": "pnpm build",
+    "link:global": "vp build && pnpm add --global \"$PWD\"",
+    "prepack": "vp build",
     "prepare": "vp config",
     "test": "vp test"
   },
@@ -65,16 +63,5 @@
     "node": ">=23.0.0",
     "pnpm": ">=11.0.0"
   },
-  "packageManager": "pnpm@11.0.6",
-  "workspaces": {
-    "catalog": {
-      "vite": "npm:@voidzero-dev/vite-plus-core@^0.1.21",
-      "vite-plus": "^0.1.21",
-      "vitest": "npm:@voidzero-dev/vite-plus-test@^0.1.21"
-    }
-  },
-  "overrides": {
-    "vite": "catalog:",
-    "vitest": "catalog:"
-  }
+  "packageManager": "pnpm@11.0.6"
 }

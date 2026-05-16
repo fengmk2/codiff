@@ -6,15 +6,15 @@ committing.
 ## Usage
 
 ```bash
-pnpm install
-pnpm build
-pnpm codiff
+vp install
+vp build
+vpr codiff
 ```
 
 Run it from any Git repository, or pass a path:
 
 ```bash
-pnpm codiff /path/to/repository
+vpr codiff /path/to/repository
 ```
 
 The packaged CLI is named `codiff`. Launching it in multiple repositories opens
@@ -27,14 +27,14 @@ has commit history and commit-diff sources ready for the later history picker.
 ## Development
 
 ```bash
-pnpm dev
-ELECTRON_RENDERER_URL=http://127.0.0.1:5173 pnpm electron
+vpr dev
+ELECTRON_RENDERER_URL=http://127.0.0.1:5173 vpr electron
 ```
 
 Useful checks:
 
 ```bash
-pnpm check
-pnpm test
-pnpm build
+vp check
+vp test
+vp build
 ```
