@@ -40,7 +40,7 @@ jobs:
         run: |
           sudo dpkg --add-architecture i386
           sudo apt update
-          sudo apt install -y wine-stable p7zip-full rpm
+          sudo apt install -y fakeroot mono-complete p7zip-full rpm wine-stable
 
           mkdir -p "${HOME}/.wine/drive_c/windows/system32"
           ln -sf $(which 7z) "${HOME}/.wine/drive_c/windows/system32/7z.exe"
@@ -67,15 +67,16 @@ jobs:
 
       - name: Build Native Apps
         run: |
-          pnpm run forge:make
-          pnpm run forge:package -- --platform=linux --arch x64
-          pnpm run forge:make -- --platform=win32
+          pnpm exec electron-forge make --platform=linux --arch=x64
+          pnpm exec electron-forge make --platform=win32 --arch=x64
+
+      - name: List Native App Artifacts
+        if: always()
+        run: find ./out -maxdepth 5 -print | sort
 
       - name: Upload Artifacts to GitHub
         uses: actions/upload-artifact@v4
         with:
           if-no-files-found: error
           name: native-apps
-          path: |
-            ./out/make
-            ./out/codiff-linux-x64
+          path: ./out
