@@ -2,17 +2,8 @@ name: build-app
 
 on:
   push:
-    paths:
-      - '.github/workflows/build-app.yml'
-      - 'bin/**'
-      - 'electron/**'
-      - 'forge.config.cjs'
-      - 'index.html'
-      - 'package.json'
-      - 'pnpm-lock.yaml'
-      - 'pnpm-workspace.yaml'
-      - 'src/**'
-      - 'vite.config.*'
+    tags:
+      - '*'
 
 env:
   ELECTRON_CACHE: ${{ github.workspace }}/.cache/electron
