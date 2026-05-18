@@ -1,4 +1,4 @@
-const { execFile } = require('node:child_process');
+const { execFile, execFileSync } = require('node:child_process');
 const {
   accessSync,
   constants,
@@ -47,8 +47,21 @@ let preferences = {
 };
 
 const commitHashPattern = /^[0-9a-f]{4,64}$/i;
+const pullRequestNumberPattern = /^#([1-9]\d*)$/;
 
 const isCommitHashArgument = (arg) => commitHashPattern.test(arg) && !existsSync(resolve(arg));
+
+const parsePullRequestNumberArgument = (arg) => {
+  const match = arg.match(pullRequestNumberPattern);
+  return match ? Number(match[1]) : null;
+};
+
+const parsePullRequestNumberValue = (value) => {
+  const normalized = value.startsWith('#') ? value : `#${value}`;
+  return parsePullRequestNumberArgument(normalized);
+};
+
+const isPullRequestMarkerArgument = (arg) => /^(?:pr|pull-request)$/i.test(arg);
 
 const isPullRequestUrlArgument = (arg) => {
   try {
@@ -60,6 +73,89 @@ const isPullRequestUrlArgument = (arg) => {
   } catch {
     return false;
   }
+};
+
+const parseGitHubRemoteUrl = (value) => {
+  const trimmed = value.trim();
+  const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/i);
+  if (sshMatch) {
+    return {
+      owner: sshMatch[1],
+      repo: sshMatch[2].replace(/\.git$/i, ''),
+    };
+  }
+
+  try {
+    const url = new URL(trimmed);
+    if (url.hostname.toLowerCase() !== 'github.com') {
+      return null;
+    }
+
+    const match = url.pathname.match(/^\/([^/]+)\/(.+?)(?:\.git)?$/);
+    return match
+      ? {
+          owner: match[1],
+          repo: match[2].replace(/\.git$/i, ''),
+        }
+      : null;
+  } catch {
+    return null;
+  }
+};
+
+const readGitHubRemotes = (repositoryPath) => {
+  const repoRoot = execFileSync('git', ['-C', repositoryPath, 'rev-parse', '--show-toplevel'], {
+    encoding: 'utf8',
+  }).trim();
+  const raw = execFileSync('git', ['-C', repoRoot, 'remote', '-v'], { encoding: 'utf8' });
+  const remotes = [];
+
+  for (const line of raw.split('\n')) {
+    const match = line.match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)$/);
+    const remote = match ? parseGitHubRemoteUrl(match[2]) : null;
+    if (remote) {
+      remotes.push({
+        direction: match[3],
+        name: match[1],
+        ...remote,
+      });
+    }
+  }
+
+  return remotes;
+};
+
+const selectGitHubRemote = (remotes) =>
+  [...remotes].sort((left, right) => {
+    const getPriority = (remote) =>
+      remote.name === 'origin'
+        ? remote.direction === 'fetch'
+          ? 0
+          : 1
+        : remote.direction === 'fetch'
+          ? 2
+          : 3;
+    return getPriority(left) - getPriority(right);
+  })[0] ?? null;
+
+const resolvePullRequestUrl = (repositoryPath, number) => {
+  let remotes;
+  try {
+    remotes = readGitHubRemotes(repositoryPath);
+  } catch {
+    throw new Error(
+      `Could not resolve PR #${number}. Run codiff from inside a GitHub repository or pass a full GitHub pull request URL.`,
+    );
+  }
+
+  const remote = selectGitHubRemote(remotes);
+  if (!remote) {
+    throw new Error(
+      `Could not resolve PR #${number} because this repository has no GitHub remote.`,
+    );
+  }
+
+  return `https://github.com/${remote.owner}/${remote.repo}/pull/${number}`;
 };
 
 const parseCommandLineArguments = (commandLine = process.argv) => {
@@ -81,13 +177,35 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   });
 
   let commitRef = typeof values.commit === 'string' ? values.commit : null;
+  let pullRequestNumber = null;
   let pullRequestUrl = null;
   let repositoryPath = null;
 
-  for (const arg of positionals) {
+  for (let index = 0; index < positionals.length; index += 1) {
+    const arg = positionals[index];
     if (!pullRequestUrl && isPullRequestUrlArgument(arg)) {
       pullRequestUrl = arg;
-    } else if (!commitRef && isCommitHashArgument(arg)) {
+      continue;
+    }
+
+    if (!pullRequestUrl && pullRequestNumber == null) {
+      const number = parsePullRequestNumberArgument(arg);
+      if (number != null) {
+        pullRequestNumber = number;
+        continue;
+      }
+
+      const nextNumber = isPullRequestMarkerArgument(arg)
+        ? parsePullRequestNumberValue(positionals[index + 1] ?? '')
+        : null;
+      if (nextNumber != null) {
+        pullRequestNumber = nextNumber;
+        index += 1;
+        continue;
+      }
+    }
+
+    if (!commitRef && isCommitHashArgument(arg)) {
       commitRef = arg;
     } else if (repositoryPath == null) {
       repositoryPath = arg;
@@ -95,7 +213,11 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   }
 
   const envCommitRef = useEnvironment ? process.env.CODIFF_COMMIT_REF || '' : '';
+  const envPullRequestNumber = useEnvironment
+    ? parsePullRequestNumberValue(process.env.CODIFF_PULL_REQUEST_NUMBER || '')
+    : null;
   const envPullRequestUrl = useEnvironment ? process.env.CODIFF_PULL_REQUEST_URL || '' : '';
+  const sourcePullRequestNumber = envPullRequestNumber ?? pullRequestNumber;
   const sourceRef = envCommitRef || commitRef;
   const sourcePullRequestUrl = envPullRequestUrl || pullRequestUrl;
   const repositoryPathProvided = Boolean(
@@ -109,7 +231,7 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
             type: 'pull-request',
             url: sourcePullRequestUrl,
           }
-        : sourceRef
+        : sourceRef && sourcePullRequestNumber == null
           ? {
               ref: sourceRef,
               type: 'commit',
@@ -118,6 +240,7 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
       walkthrough:
         (useEnvironment && process.env.CODIFF_WALKTHROUGH === '1') || values.walkthrough === true,
     },
+    pullRequestNumber: sourcePullRequestNumber,
     repositoryPath,
   };
 };
@@ -125,8 +248,28 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
 const getCommandLineRepositoryPath = (commandLine = process.argv) =>
   parseCommandLineArguments(commandLine).repositoryPath;
 
-const getCommandLineLaunchOptions = (commandLine = process.argv) =>
-  parseCommandLineArguments(commandLine).launchOptions;
+const getCommandLineLaunchOptions = (commandLine = process.argv, fallbackPath = process.cwd()) => {
+  const { launchOptions, pullRequestNumber, repositoryPath } =
+    parseCommandLineArguments(commandLine);
+  if (pullRequestNumber == null || launchOptions.source) {
+    return launchOptions;
+  }
+
+  return {
+    ...launchOptions,
+    source: {
+      type: 'pull-request',
+      url: resolvePullRequestUrl(
+        resolve(
+          (commandLine === process.argv ? process.env.CODIFF_REPOSITORY_PATH : '') ||
+            repositoryPath ||
+            fallbackPath,
+        ),
+        pullRequestNumber,
+      ),
+    },
+  };
+};
 
 const getLaunchPath = () =>
   resolve(process.env.CODIFF_REPOSITORY_PATH || getCommandLineRepositoryPath() || process.cwd());
@@ -542,7 +685,7 @@ if (squirrelStartup || !lock) {
           getCommandLineRepositoryPath(commandLine) ||
           workingDirectory,
       ),
-      additionalData?.launchOptions || getCommandLineLaunchOptions(commandLine),
+      additionalData?.launchOptions || getCommandLineLaunchOptions(commandLine, workingDirectory),
     );
   });
 

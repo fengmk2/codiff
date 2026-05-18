@@ -1,14 +1,23 @@
+import { execFile } from 'node:child_process';
 import { mkdir, mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
+import { promisify } from 'node:util';
 import { expect, test } from 'vite-plus/test';
-import { parseArguments } from '../bin/arguments.js';
+import { parseArguments, resolvePullRequestUrl } from '../bin/arguments.js';
+
+const execFileAsync = promisify(execFile);
+
+const git = async (repo: string, args: ReadonlyArray<string>) => {
+  await execFileAsync('git', ['-C', repo, ...args], { encoding: 'utf8' });
+};
 
 test('parseArguments treats a hash positional as a commit ref', () => {
   const commitRef = 'a1b2c3d4e5f678901234567890abcdef12345678';
 
   expect(parseArguments(['-w', commitRef])).toEqual({
     commitRef,
+    pullRequestNumber: null,
     pullRequestUrl: null,
     requestedPath: resolve(process.cwd()),
     walkthrough: true,
@@ -24,6 +33,7 @@ test('parseArguments keeps existing hash-like paths as repository paths', async 
 
     expect(parseArguments([repositoryPath])).toEqual({
       commitRef: null,
+      pullRequestNumber: null,
       pullRequestUrl: null,
       requestedPath: repositoryPath,
       walkthrough: false,
@@ -38,8 +48,45 @@ test('parseArguments treats GitHub pull request URLs as review sources', () => {
 
   expect(parseArguments([pullRequestUrl])).toEqual({
     commitRef: null,
+    pullRequestNumber: null,
     pullRequestUrl,
     requestedPath: resolve(process.cwd()),
     walkthrough: false,
   });
+});
+
+test('parseArguments treats PR number shorthands as review sources', () => {
+  expect(parseArguments(['#75'])).toEqual({
+    commitRef: null,
+    pullRequestNumber: 75,
+    pullRequestUrl: null,
+    requestedPath: resolve(process.cwd()),
+    walkthrough: false,
+  });
+});
+
+test('parseArguments treats PR marker arguments as review sources', () => {
+  expect(parseArguments(['pr', '75'])).toEqual({
+    commitRef: null,
+    pullRequestNumber: 75,
+    pullRequestUrl: null,
+    requestedPath: resolve(process.cwd()),
+    walkthrough: false,
+  });
+});
+
+test('resolvePullRequestUrl builds GitHub PR URLs from the origin remote', async () => {
+  const repositoryPath = await mkdtemp(join(tmpdir(), 'codiff-cli-'));
+
+  try {
+    await git(repositoryPath, ['init']);
+    await git(repositoryPath, ['remote', 'add', 'upstream', 'https://github.com/other/repo.git']);
+    await git(repositoryPath, ['remote', 'add', 'origin', 'git@github.com:nkzw-tech/codiff.git']);
+
+    expect(resolvePullRequestUrl(repositoryPath, 75)).toBe(
+      'https://github.com/nkzw-tech/codiff/pull/75',
+    );
+  } finally {
+    await rm(repositoryPath, { force: true, recursive: true });
+  }
 });
