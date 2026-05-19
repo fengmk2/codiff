@@ -4,6 +4,7 @@ import {
   registerCustomTheme,
   type DiffLineAnnotation,
   type CodeViewItem,
+  type CodeViewLineSelection,
   type CodeViewOptions,
   type FileDiffMetadata,
 } from '@pierre/diffs';
@@ -48,6 +49,49 @@ type ReviewAnnotationMetadata = {
 type CodeViewInstance = NonNullable<
   ReturnType<CodeViewHandle<ReviewAnnotationMetadata>['getInstance']>
 >;
+
+const isInteractiveReviewEvent = (event: PointerEvent) =>
+  event.composedPath().some(
+    (target) =>
+      // oxlint-disable-next-line @nkzw/no-instanceof
+      target instanceof HTMLElement &&
+      (target.closest('button, textarea, input, select, a') ||
+        target.closest('.review-comment-thread')),
+  );
+
+const getReviewCommentLineSelection = (comment: ReviewComment): CodeViewLineSelection => ({
+  id: `diff:${comment.sectionId}`,
+  range: {
+    end: comment.lineNumber,
+    ...(comment.startSide != null && comment.startSide !== comment.side
+      ? { endSide: comment.side }
+      : {}),
+    side: comment.startSide ?? comment.side,
+    start: comment.startLineNumber ?? comment.lineNumber,
+  },
+});
+
+type ReviewPatchRow = {
+  additionLineNumber?: number;
+  deletionLineNumber?: number;
+  prefix: '+' | '-' | ' ';
+  side?: ReviewComment['side'];
+  text: string;
+};
+
+const matchesReviewPatchLine = (
+  row: ReviewPatchRow,
+  lineNumber: number,
+  side: ReviewComment['side'],
+) =>
+  row.side
+    ? row.side === side &&
+      (side === 'additions'
+        ? row.additionLineNumber === lineNumber
+        : row.deletionLineNumber === lineNumber)
+    : side === 'additions'
+      ? row.additionLineNumber === lineNumber
+      : row.deletionLineNumber === lineNumber;
 
 function updateStickyHeaderState(viewer: CodeViewInstance) {
   for (const item of viewer.getRenderedItems()) {
@@ -99,6 +143,8 @@ type ReviewComment = {
   lineNumber: number;
   sectionId: string;
   side: 'additions' | 'deletions';
+  startLineNumber?: number;
+  startSide?: 'additions' | 'deletions';
   submittedAt?: string;
   url?: string;
 };
@@ -372,6 +418,7 @@ const fileTreeSort = (
 const defaultPreferences: CodiffPreferences = {
   openAIModel: 'gpt-5.3-codex-spark',
   showWhitespace: false,
+  theme: 'system',
 };
 
 const codeViewUnsafeCSS = `
@@ -382,6 +429,8 @@ const codeViewUnsafeCSS = `
     --diffs-line-height: 20px;
     --diffs-light-bg: #ffffff;
     --diffs-dark-bg: #1c1c1c;
+    --diffs-bg-selection-override: rgb(61 135 245 / 0.34);
+    --diffs-bg-selection-number-override: rgb(61 135 245 / 0.46);
   }
 
   [data-diff-type="split"][data-overflow="scroll"] {
@@ -426,6 +475,10 @@ const codeViewUnsafeCSS = `
     height: calc(1lh - 4px);
     transform: translate(-4px, 2px);
     width: calc(1lh - 4px);
+  }
+
+  [data-selected-line] [data-gutter-utility-slot] {
+    display: none;
   }
 `;
 
@@ -1070,14 +1123,66 @@ export const fileHasVisibleDiff = (file: ChangedFile, showWhitespace: boolean) =
 const getFirstVisibleSection = (file: ChangedFile, showWhitespace: boolean) =>
   getVisibleDiffSections(file, showWhitespace)[0]?.section;
 
-const getCommentKey = (comment: Pick<ReviewComment, 'lineNumber' | 'sectionId' | 'side'>) =>
-  `${comment.sectionId}:${comment.side}:${comment.lineNumber}`;
+const getReviewSideLabel = (side: ReviewComment['side']) => (side === 'additions' ? 'New' : 'Old');
+
+const getReviewCommentStartSide = (comment: Pick<ReviewComment, 'side' | 'startSide'>) =>
+  comment.startSide ?? comment.side;
+
+const getReviewCommentLineLabel = (
+  comment: Pick<ReviewComment, 'lineNumber' | 'side' | 'startLineNumber' | 'startSide'>,
+) => {
+  const startLineNumber = comment.startLineNumber;
+  const startSide = getReviewCommentStartSide(comment);
+  if (
+    startLineNumber == null ||
+    (startLineNumber === comment.lineNumber && startSide === comment.side)
+  ) {
+    return `${getReviewSideLabel(comment.side)} line ${comment.lineNumber}`;
+  }
+
+  if (startSide === comment.side) {
+    return `${getReviewSideLabel(comment.side)} lines ${startLineNumber}-${comment.lineNumber}`;
+  }
+
+  return `${getReviewSideLabel(startSide)} line ${startLineNumber} to ${getReviewSideLabel(
+    comment.side,
+  )} line ${comment.lineNumber}`;
+};
+
+const getReviewCommentRangeProps = (
+  comment: Pick<ReviewComment, 'lineNumber' | 'side' | 'startLineNumber' | 'startSide'>,
+) => {
+  const startLineNumber = comment.startLineNumber;
+  if (startLineNumber == null) {
+    return {};
+  }
+
+  const startSide = getReviewCommentStartSide(comment);
+  return startLineNumber !== comment.lineNumber || startSide !== comment.side
+    ? {
+        startLineNumber,
+        ...(startSide !== comment.side ? { startSide } : {}),
+      }
+    : {};
+};
+
+const getCommentKey = (
+  comment: Pick<
+    ReviewComment,
+    'lineNumber' | 'sectionId' | 'side' | 'startLineNumber' | 'startSide'
+  >,
+) =>
+  `${comment.sectionId}:${comment.side}:${comment.lineNumber}:${comment.startLineNumber ?? comment.lineNumber}:${
+    comment.startSide ?? comment.side
+  }`;
 
 const getReviewCommentsDigest = (comments: ReadonlyArray<ReviewComment>) =>
   comments
     .map(
       (comment) =>
         `${comment.id}:${comment.sectionId}:${comment.side}:${comment.lineNumber}:${
+          comment.startLineNumber ?? ''
+        }:${comment.startSide ?? ''}:${
           comment.githubSubmit?.status ?? ''
         }:${comment.githubSubmit?.error ?? ''}`,
     )
@@ -1108,13 +1213,7 @@ const getReviewCommentPatchContext = (
   const fileDiff = parseSectionDiffWithOptions(file, section, showWhitespace);
 
   for (const hunk of fileDiff.hunks) {
-    const rows: Array<{
-      additionLineNumber?: number;
-      deletionLineNumber?: number;
-      prefix: '+' | '-' | ' ';
-      side?: ReviewComment['side'];
-      text: string;
-    }> = [];
+    const rows: Array<ReviewPatchRow> = [];
     let deletionLineNumber = hunk.deletionStart;
     let additionLineNumber = hunk.additionStart;
 
@@ -1155,23 +1254,21 @@ const getReviewCommentPatchContext = (
       additionLineNumber += content.additions;
     }
 
-    const targetIndex = rows.findIndex((row) =>
-      row.side
-        ? row.side === comment.side &&
-          (comment.side === 'additions'
-            ? row.additionLineNumber === comment.lineNumber
-            : row.deletionLineNumber === comment.lineNumber)
-        : comment.side === 'additions'
-          ? row.additionLineNumber === comment.lineNumber
-          : row.deletionLineNumber === comment.lineNumber,
+    const startLine = comment.startLineNumber ?? comment.lineNumber;
+    const startSide = getReviewCommentStartSide(comment);
+    const endLine = comment.lineNumber;
+    const targetIndex = rows.findIndex((row) => matchesReviewPatchLine(row, endLine, comment.side));
+    const rangeStartIndex = rows.findIndex((row) =>
+      matchesReviewPatchLine(row, startLine, startSide),
     );
 
     if (targetIndex === -1) {
       continue;
     }
 
-    const start = Math.max(0, targetIndex - 3);
-    const end = Math.min(rows.length, targetIndex + 4);
+    const anchorStart = rangeStartIndex === -1 ? targetIndex : rangeStartIndex;
+    const start = Math.max(0, Math.min(anchorStart, targetIndex) - 3);
+    const end = Math.min(rows.length, Math.max(anchorStart, targetIndex) + 4);
     const context = rows.slice(start, end).map((row) => {
       const lineNumber =
         row.prefix === '+'
@@ -1216,7 +1313,7 @@ export const buildReviewCommentsMarkdown = (
       const fence = getMarkdownFence(context);
 
       return [
-        `${index + 1}. **${comment.filePath}** (${comment.side} line ${comment.lineNumber})`,
+        `${index + 1}. **${comment.filePath}** (${getReviewCommentLineLabel(comment)})`,
         '',
         indentMarkdown(`${fence}diff\n${context}\n${fence}`),
         '',
@@ -1244,6 +1341,7 @@ const getReviewCommentsFromState = (state: RepositoryState): ReadonlyArray<Revie
                 lineNumber: comment.lineNumber,
                 sectionId: section.id,
                 side: comment.side,
+                ...getReviewCommentRangeProps(comment),
                 submittedAt: comment.submittedAt,
                 url: comment.url,
               },
@@ -1910,6 +2008,8 @@ function ReviewAnnotation({
   identity,
   isPullRequest,
   onAskCodex,
+  onCommentBlur,
+  onCommentFocus,
   onDeleteComment,
   onSubmitComment,
   onUpdateComment,
@@ -1921,6 +2021,8 @@ function ReviewAnnotation({
   identity: GitIdentity | null;
   isPullRequest: boolean;
   onAskCodex: (commentId: string) => void;
+  onCommentBlur: () => void;
+  onCommentFocus: (comment: ReviewComment) => void;
   onDeleteComment: (commentId: string) => void;
   onSubmitComment: (commentId: string) => void;
   onUpdateComment: (commentId: string, body: string) => void;
@@ -1997,9 +2099,7 @@ function ReviewAnnotation({
                   }${comment.isReadOnly ? ' read-only' : ''}`}
                 >
                   <strong>{displayName}</strong>
-                  <span>
-                    {comment.side === 'additions' ? 'New' : 'Old'} line {comment.lineNumber}
-                  </span>
+                  <span>{getReviewCommentLineLabel(comment)}</span>
                   {!comment.isReadOnly ? (
                     <button
                       className="review-comment-action"
@@ -2039,9 +2139,11 @@ function ReviewAnnotation({
                   ) : null}
                 </div>
                 <textarea
-                  aria-label={`Comment on ${comment.filePath} line ${comment.lineNumber}`}
+                  aria-label={`Comment on ${comment.filePath} ${getReviewCommentLineLabel(comment)}`}
                   className={`review-comment-input${comment.isReadOnly ? ' read-only' : ''}`}
+                  onBlur={onCommentBlur}
                   onChange={(event) => onUpdateComment(comment.id, event.currentTarget.value)}
+                  onFocus={() => onCommentFocus(comment)}
                   onKeyDown={(event) => handleCommentKeyDown(event, comment)}
                   placeholder="Write a review comment…"
                   readOnly={comment.isReadOnly}
@@ -2139,6 +2241,7 @@ function ReviewCodeView({
   const codeViewRef = useRef<CodeViewHandle<ReviewAnnotationMetadata>>(null);
   const handledScrollRequestRef = useRef<number | null>(null);
   const highlightFrameRef = useRef<number | null>(null);
+  const [selectedLines, setSelectedLines] = useState<CodeViewLineSelection | null>(null);
   const stickyHeaderFrameRef = useRef<number | null>(null);
   const commentsBySection = useMemo(() => {
     const map = new Map<string, Array<ReviewComment>>();
@@ -2240,7 +2343,7 @@ function ReviewCodeView({
         diffIndicators: 'bars',
         diffStyle: 'split',
         enableGutterUtility: true,
-        enableLineSelection: false,
+        enableLineSelection: true,
         expandUnchanged: false,
         expansionLineCount: diffContextExpansionLineCount,
         hunkSeparators: 'line-info-basic',
@@ -2248,32 +2351,48 @@ function ReviewCodeView({
           walkthroughNotes.size > 0 ? codeViewItemMetricsWithWalkthrough : codeViewItemMetrics,
         layout: codeViewLayout,
         lineDiffType: 'char',
+        lineHoverHighlight: 'both',
         onGutterUtilityClick: (range, context) => {
           const meta = itemMetadata.get(context.item.id);
           if (!meta || meta.isCollapsed) {
             return;
           }
-          const side = range.side ?? range.endSide ?? 'additions';
+          const startSide = range.side ?? range.endSide ?? 'additions';
+          const endSide = range.endSide ?? startSide;
+          if (startSide !== endSide) {
+            window.alert('Review comments cannot span both sides of a split diff.');
+            return;
+          }
+          const start = Math.min(range.start, range.end);
+          const end = Math.max(range.start, range.end);
           onCreateComment({
             filePath: meta.file.path,
-            lineNumber: range.start,
+            lineNumber: end,
             sectionId: meta.section.id,
-            side,
+            side: endSide,
+            ...(end !== start ? { startLineNumber: start } : {}),
           });
         },
         onLineClick: (line, context) => {
-          if (line.type !== 'diff-line') {
+          if (isInteractiveReviewEvent(line.event)) {
             return;
           }
+
           const meta = itemMetadata.get(context.item.id);
           if (!meta || meta.isCollapsed) {
             return;
           }
+
+          const side = 'annotationSide' in line ? line.annotationSide : null;
+          if (!side) {
+            return;
+          }
+
           onCreateComment({
             filePath: meta.file.path,
             lineNumber: line.lineNumber,
             sectionId: meta.section.id,
-            side: line.annotationSide,
+            side,
           });
         },
         stickyHeaders: true,
@@ -2286,6 +2405,23 @@ function ReviewCodeView({
         unsafeCSS: codeViewUnsafeCSS,
       }) satisfies CodeViewOptions<ReviewAnnotationMetadata>,
     [itemMetadata, onCreateComment, walkthroughNotes.size],
+  );
+
+  const highlightCommentLines = useCallback((comment: ReviewComment) => {
+    setSelectedLines(getReviewCommentLineSelection(comment));
+  }, []);
+
+  const clearCommentLineHighlight = useCallback(() => {
+    codeViewRef.current?.clearSelectedLines();
+    setSelectedLines(null);
+  }, []);
+
+  const deleteComment = useCallback(
+    (commentId: string) => {
+      clearCommentLineHighlight();
+      onDeleteComment(commentId);
+    },
+    [clearCommentLineHighlight, onDeleteComment],
   );
 
   const workerPoolOptions = useMemo(
@@ -2462,19 +2598,23 @@ function ReviewCodeView({
           identity={gitIdentity}
           isPullRequest={isPullRequest}
           onAskCodex={onAskCodex}
-          onDeleteComment={onDeleteComment}
+          onCommentBlur={clearCommentLineHighlight}
+          onCommentFocus={highlightCommentLines}
+          onDeleteComment={deleteComment}
           onSubmitComment={onSubmitComment}
           onUpdateComment={onUpdateComment}
         />
       ) : null,
     [
       comments,
+      clearCommentLineHighlight,
+      deleteComment,
       focusCommentId,
       focusCommentRequest,
       gitIdentity,
+      highlightCommentLines,
       isPullRequest,
       onAskCodex,
-      onDeleteComment,
       onSubmitComment,
       onUpdateComment,
     ],
@@ -2498,12 +2638,29 @@ function ReviewCodeView({
         className="code-view"
         items={items}
         onScroll={handleScroll}
+        onSelectedLinesChange={setSelectedLines}
         options={codeViewOptions}
         ref={codeViewRef}
         renderAnnotation={renderAnnotation}
         renderCustomHeader={renderCustomHeader}
+        selectedLines={selectedLines}
       />
     </WorkerPoolContextProvider>
+  );
+}
+
+function ReviewSourceLoading() {
+  const [visible, setVisible] = useState(false);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setVisible(true), 200);
+    return () => window.clearTimeout(timer);
+  }, []);
+
+  return (
+    <div className="review-source-loading loading pulse italic" role="status">
+      {visible ? 'Thinking…' : null}
+    </div>
   );
 }
 
@@ -2857,8 +3014,10 @@ export default function App() {
       }
       setTerminalHelperStatus(nextTerminalHelperStatus);
 
-      const nextState = await window.codiff.getRepositoryState();
-      const history = await window.codiff.getRepositoryHistory(HISTORY_PAGE_SIZE);
+      const [nextState, history] = await Promise.all([
+        window.codiff.getRepositoryState(),
+        window.codiff.getRepositoryHistory(HISTORY_PAGE_SIZE),
+      ]);
 
       if (canceled) {
         return;
@@ -3233,6 +3392,15 @@ export default function App() {
       removeListener();
     };
   }, []);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    if (preferences.theme === 'system') {
+      root.removeAttribute('data-theme');
+    } else {
+      root.setAttribute('data-theme', preferences.theme);
+    }
+  }, [preferences.theme]);
 
   useEffect(
     () => () => {
@@ -3775,6 +3943,7 @@ export default function App() {
           lineNumber: comment.lineNumber,
           sectionId: comment.sectionId,
           side: comment.side,
+          ...getReviewCommentRangeProps(comment),
         },
         source: currentState.source,
         walkthroughNote: note
@@ -3838,6 +4007,7 @@ export default function App() {
             filePath: comment.filePath,
             lineNumber: comment.lineNumber,
             side: comment.side,
+            ...getReviewCommentRangeProps(comment),
           },
           source: currentState.source,
         })
@@ -3855,6 +4025,7 @@ export default function App() {
                     lineNumber: submittedComment.lineNumber,
                     sectionId: comment.sectionId,
                     side: submittedComment.side,
+                    ...getReviewCommentRangeProps(submittedComment),
                     submittedAt: submittedComment.submittedAt,
                     url: submittedComment.url,
                   }
@@ -3892,6 +4063,7 @@ export default function App() {
             filePath: comment.filePath,
             lineNumber: comment.lineNumber,
             side: comment.side,
+            ...getReviewCommentRangeProps(comment),
           })),
           event,
           source: currentState.source,
@@ -3948,7 +4120,7 @@ export default function App() {
 
   if (!state) {
     return (
-      <main className={`loading italic${launchOptions.walkthrough ? ' codex' : ''}`}>
+      <main className={`loading italic${launchOptions.walkthrough ? ' codex' : ' pulse'}`}>
         {launchOptions.walkthrough ? 'Waiting on Codex…' : 'Thinking…'}
       </main>
     );
@@ -4033,7 +4205,7 @@ export default function App() {
       </aside>
       <main className="review">
         {isSwitchingSource ? (
-          <div className="review-source-loading" />
+          <ReviewSourceLoading />
         ) : state.files.length === 0 ? (
           <div className="empty-state">
             <div className="empty-panel squircle">

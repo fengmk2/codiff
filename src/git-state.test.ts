@@ -22,6 +22,8 @@ type StatusEntry = {
 };
 
 type GitStateModule = {
+  normalizeGitHubReviewComment: (comment: Record<string, unknown>) => unknown;
+  normalizePullRequestComment: (comment: Record<string, unknown>) => Record<string, unknown>;
   parseGitHubPullRequestUrl: (value: string) => {
     number: number;
     owner: string;
@@ -43,6 +45,8 @@ type GitStateModule = {
 const execFileAsync = promisify(execFile);
 const require = createRequire(import.meta.url);
 const {
+  normalizeGitHubReviewComment,
+  normalizePullRequestComment,
   parseGitHubPullRequestUrl,
   parseStatus,
   readDiffSectionContent,
@@ -106,6 +110,51 @@ test('parseGitHubPullRequestUrl reads canonical pull request URLs', () => {
     owner: 'nkzw-tech',
     repo: 'codiff',
     url: 'https://github.com/nkzw-tech/codiff/pull/3',
+  });
+});
+
+test('normalizeGitHubReviewComment preserves multi-line ranges', () => {
+  expect(
+    normalizeGitHubReviewComment({
+      body: 'Check these together.',
+      created_at: '2026-05-19T00:00:00Z',
+      html_url: 'https://github.com/nkzw-tech/codiff/pull/1#discussion_r1',
+      id: 1,
+      line: 8,
+      path: 'src/file.ts',
+      side: 'RIGHT',
+      start_line: 5,
+      start_side: 'RIGHT',
+      user: {
+        login: 'reviewer',
+      },
+    }),
+  ).toMatchObject({
+    body: 'Check these together.',
+    filePath: 'src/file.ts',
+    lineNumber: 8,
+    side: 'additions',
+    startLineNumber: 5,
+  });
+});
+
+test('normalizePullRequestComment uses the start side for ranged comments', () => {
+  expect(
+    normalizePullRequestComment({
+      body: 'Check the old context.',
+      filePath: 'src/file.ts',
+      lineNumber: 8,
+      side: 'additions',
+      startLineNumber: 5,
+      startSide: 'deletions',
+    }),
+  ).toMatchObject({
+    body: 'Check the old context.',
+    line: 8,
+    path: 'src/file.ts',
+    side: 'RIGHT',
+    start_line: 5,
+    start_side: 'LEFT',
   });
 });
 

@@ -124,6 +124,8 @@ export type ReviewAssistantRequest = {
     lineNumber: number;
     sectionId: string;
     side: 'additions' | 'deletions';
+    startLineNumber?: number;
+    startSide?: 'additions' | 'deletions';
   };
   source?: ReviewSource;
   walkthroughNote?: {
@@ -159,9 +161,12 @@ export type DiffSectionContentRequest = {
   source?: ReviewSource;
 };
 
+export type CodiffTheme = 'system' | 'light' | 'dark';
+
 export type CodiffPreferences = {
   openAIModel: string;
   showWhitespace: boolean;
+  theme: CodiffTheme;
 };
 
 export type PullRequestReviewComment = {
@@ -169,6 +174,8 @@ export type PullRequestReviewComment = {
   filePath: string;
   lineNumber: number;
   side: 'additions' | 'deletions';
+  startLineNumber?: number;
+  startSide?: 'additions' | 'deletions';
 };
 
 export type PullRequestExistingReviewComment = PullRequestReviewComment & {

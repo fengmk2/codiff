@@ -51,6 +51,7 @@ const windowLaunchOptions = new Map();
 let preferences = {
   openAIModel: DEFAULT_OPENAI_MODEL,
   showWhitespace: false,
+  theme: 'system',
 };
 
 const commitHashPattern = /^[0-9a-f]{4,64}$/i;
@@ -285,6 +286,9 @@ const getLaunchOptions = () => getCommandLineLaunchOptions();
 
 const getPreferencesPath = () => join(app.getPath('userData'), 'preferences.json');
 
+const normalizeTheme = (theme) =>
+  theme === 'system' || theme === 'light' || theme === 'dark' ? theme : 'system';
+
 const readPreferences = () => {
   try {
     const storedPreferences = JSON.parse(readFileSync(getPreferencesPath(), 'utf8'));
@@ -292,6 +296,7 @@ const readPreferences = () => {
       ...preferences,
       ...storedPreferences,
       openAIModel: normalizeOpenAIModel(storedPreferences?.openAIModel),
+      theme: normalizeTheme(storedPreferences?.theme),
     };
   } catch {
     return preferences;
@@ -315,7 +320,9 @@ const updatePreferences = (nextPreferences) => {
     ...preferences,
     ...nextPreferences,
     openAIModel: normalizeOpenAIModel(nextPreferences.openAIModel ?? preferences.openAIModel),
+    theme: normalizeTheme(nextPreferences.theme ?? preferences.theme),
   };
+  nativeTheme.themeSource = preferences.theme;
   writePreferences();
   sendPreferencesChanged();
   Menu.setApplicationMenu(buildApplicationMenu());
@@ -337,6 +344,10 @@ const getCodexOptions = () => ({
     updatePreferences({ openAIModel: fallbackModel });
   },
 });
+
+const updateTheme = (theme) => {
+  updatePreferences({ theme });
+};
 
 const readRepositoryWatcherSnapshot = async (repositoryPath) => {
   try {
@@ -660,6 +671,29 @@ const buildApplicationMenu = () =>
           label: 'Show Whitespace',
           type: 'checkbox',
         },
+        {
+          label: 'Theme',
+          submenu: [
+            {
+              checked: preferences.theme === 'system',
+              click: () => updateTheme('system'),
+              label: 'Match System',
+              type: 'radio',
+            },
+            {
+              checked: preferences.theme === 'light',
+              click: () => updateTheme('light'),
+              label: 'Light',
+              type: 'radio',
+            },
+            {
+              checked: preferences.theme === 'dark',
+              click: () => updateTheme('dark'),
+              label: 'Dark',
+              type: 'radio',
+            },
+          ],
+        },
         { type: 'separator' },
         { role: 'togglefullscreen' },
         { role: 'reload' },
@@ -747,6 +781,7 @@ if (squirrelStartup || !lock) {
 
   app.on('ready', () => {
     preferences = readPreferences();
+    nativeTheme.themeSource = preferences.theme;
     Menu.setApplicationMenu(buildApplicationMenu());
     createWindow(getLaunchPath(), getLaunchOptions());
   });

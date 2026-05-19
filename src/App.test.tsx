@@ -249,13 +249,57 @@ test('review comment markdown includes file and patch context', () => {
   );
 
   expect(markdown).toContain('# Address these Review Comments');
-  expect(markdown).toContain('1. **src/comment.ts** (additions line 2)');
+  expect(markdown).toContain('1. **src/comment.ts** (New line 2)');
   expect(markdown).toContain('Please double-check this value.');
   expect(markdown).toContain('```diff');
   expect(markdown).toContain('+   2 | const value = "needle";');
   expect(markdown.indexOf('```diff')).toBeLessThan(
     markdown.indexOf('Please double-check this value.'),
   );
+});
+
+test('review comment markdown includes multi-line ranges', () => {
+  const file = {
+    fingerprint: 'comment-range-export',
+    path: 'src/range.ts',
+    sections: [
+      {
+        binary: false,
+        id: 'src/range.ts:unstaged',
+        kind: 'unstaged',
+        newFile: {
+          contents: 'const first = true;\nconst second = true;\n',
+          name: 'src/range.ts',
+        },
+        oldFile: {
+          contents: '',
+          name: 'src/range.ts',
+        },
+        patch: '',
+      },
+    ],
+    status: 'added',
+  } satisfies ChangedFile;
+
+  const markdown = buildReviewCommentsMarkdown(
+    [file],
+    [
+      {
+        body: 'These should be considered together.',
+        filePath: 'src/range.ts',
+        id: 'comment-1',
+        lineNumber: 2,
+        sectionId: 'src/range.ts:unstaged',
+        side: 'additions',
+        startLineNumber: 1,
+      },
+    ],
+    false,
+  );
+
+  expect(markdown).toContain('1. **src/range.ts** (New lines 1-2)');
+  expect(markdown).toContain('+   1 | const first = true;');
+  expect(markdown).toContain('+   2 | const second = true;');
 });
 
 test('escape discards empty review comments without confirmation', () => {

@@ -666,12 +666,23 @@ const readPullRequestDiff = async (repoRoot, pullRequest) =>
   ]);
 
 const fromGitHubReviewSide = (side) => (side === 'LEFT' ? 'deletions' : 'additions');
+const isGitHubReviewSide = (side) => side === 'LEFT' || side === 'RIGHT';
+
+const firstNumber = (...values) => values.find((value) => typeof value === 'number');
 
 const normalizeGitHubReviewComment = (comment) => {
-  const lineNumber = comment.line ?? comment.original_line;
+  const lineNumber = firstNumber(comment.line, comment.original_line);
   if (lineNumber == null || !comment.path || !comment.body) {
     return null;
   }
+
+  const side = fromGitHubReviewSide(comment.side);
+  const startLineNumber = firstNumber(comment.start_line, comment.original_start_line);
+  const startSide = isGitHubReviewSide(comment.start_side)
+    ? fromGitHubReviewSide(comment.start_side)
+    : undefined;
+  const hasRange =
+    startLineNumber != null && (startLineNumber !== lineNumber || (startSide ?? side) !== side);
 
   return {
     author: {
@@ -683,7 +694,9 @@ const normalizeGitHubReviewComment = (comment) => {
     filePath: comment.path,
     id: `github:${comment.id}`,
     lineNumber,
-    side: fromGitHubReviewSide(comment.side),
+    side,
+    ...(hasRange ? { startLineNumber } : {}),
+    ...(hasRange && startSide != null && startSide !== side ? { startSide } : {}),
     submittedAt: comment.created_at,
     url: comment.html_url,
   };
@@ -813,12 +826,23 @@ const readPullRequestState = async (launchPath, source) => {
 
 const toGitHubReviewSide = (side) => (side === 'deletions' ? 'LEFT' : 'RIGHT');
 
-const normalizePullRequestComment = (comment) => ({
-  body: comment.body,
-  line: comment.lineNumber,
-  path: comment.filePath,
-  side: toGitHubReviewSide(comment.side),
-});
+const normalizePullRequestComment = (comment) => {
+  const payload = {
+    body: comment.body,
+    line: comment.lineNumber,
+    path: comment.filePath,
+    side: toGitHubReviewSide(comment.side),
+  };
+  const startSide = comment.startSide ?? comment.side;
+  if (
+    typeof comment.startLineNumber === 'number' &&
+    comment.startLineNumber !== comment.lineNumber
+  ) {
+    payload.start_line = comment.startLineNumber;
+    payload.start_side = toGitHubReviewSide(startSide);
+  }
+  return payload;
+};
 
 const submitPullRequestComment = async (launchPath, request) => {
   const repoRoot = (await git(launchPath, ['rev-parse', '--show-toplevel'])).trim();
@@ -1223,6 +1247,8 @@ const listRepositoryHistory = async (launchPath, limit = 200) => {
 
 module.exports = {
   listRepositoryHistory,
+  normalizeGitHubReviewComment,
+  normalizePullRequestComment,
   parseStatus,
   parseGitHubPullRequestUrl,
   readDiffSectionContent,

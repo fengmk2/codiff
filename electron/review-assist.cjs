@@ -33,6 +33,8 @@ const buildReviewAssistantInput = (state, request) => {
       filePath: comment.filePath,
       lineNumber: comment.lineNumber,
       side: comment.side,
+      startLineNumber: comment.startLineNumber,
+      startSide: comment.startSide,
     },
     focus: file
       ? {
