@@ -8,6 +8,7 @@ import {
   type FileDiffMetadata,
 } from '@pierre/diffs';
 import { CodeView, type CodeViewHandle, WorkerPoolContextProvider } from '@pierre/diffs/react';
+import type { FileTreeRowDecorationRenderer } from '@pierre/trees';
 import { FileTree, useFileTree } from '@pierre/trees/react';
 import {
   useCallback,
@@ -72,6 +73,12 @@ type DiffSearchResult = {
   file: ChangedFile;
   matchCount: number;
   matches: ReadonlyArray<DiffSearchMatch>;
+};
+
+type DiffLineCount = {
+  additions: number;
+  countable: boolean;
+  deletions: number;
 };
 
 type ReviewComment = {
@@ -416,7 +423,7 @@ const codeViewUnsafeCSS = `
     box-shadow: 0 7px 18px -14px rgb(0 0 0 / 0.72);
     color: var(--diffs-modified-base);
     height: calc(1lh - 4px);
-    transform: translate(-3px, 2px);
+    transform: translate(-4px, 2px);
     width: calc(1lh - 4px);
   }
 `;
@@ -588,6 +595,74 @@ const writeViewed = (root: string, viewed: Record<string, string>) => {
 };
 
 const getItemId = (section: DiffSection) => `diff:${section.id}`;
+
+const emptyDiffLineCount: DiffLineCount = {
+  additions: 0,
+  countable: false,
+  deletions: 0,
+};
+
+const getDiffLineCountFromVisibleSections = (
+  sections: ReadonlyArray<{
+    fileDiff: FileDiffMetadata;
+    section: DiffSection;
+  }>,
+): DiffLineCount => {
+  let additions = 0;
+  let countable = false;
+  let deletions = 0;
+
+  for (const { fileDiff, section } of sections) {
+    if (section.binary || (section.loadState != null && section.loadState !== 'ready')) {
+      continue;
+    }
+
+    countable = true;
+    for (const hunk of fileDiff.hunks) {
+      additions += hunk.additionLines;
+      deletions += hunk.deletionLines;
+    }
+  }
+
+  return countable
+    ? {
+        additions,
+        countable,
+        deletions,
+      }
+    : emptyDiffLineCount;
+};
+
+export const getDiffLineCount = (file: ChangedFile, showWhitespace: boolean): DiffLineCount =>
+  getDiffLineCountFromVisibleSections(getVisibleDiffSections(file, showWhitespace));
+
+const formatLineCountNumber = (value: number) => value.toLocaleString('en-US');
+
+const formatCompactLineCountNumber = (value: number) => {
+  if (value < 1000) {
+    return String(value);
+  }
+
+  if (value < 10_000) {
+    return `${Number((value / 1000).toFixed(1))}k`;
+  }
+
+  if (value < 1_000_000) {
+    return `${Math.round(value / 1000)}k`;
+  }
+
+  return `${Number((value / 1_000_000).toFixed(1))}m`;
+};
+
+const formatTreeLineCount = ({ additions, deletions }: DiffLineCount) =>
+  `+${formatCompactLineCountNumber(additions)} -${formatCompactLineCountNumber(deletions)}`;
+
+const pluralizeLine = (count: number) => (count === 1 ? 'line' : 'lines');
+
+const getDiffLineCountTitle = ({ additions, deletions }: DiffLineCount) =>
+  `${formatLineCountNumber(additions)} added ${pluralizeLine(
+    additions,
+  )}, ${formatLineCountNumber(deletions)} removed ${pluralizeLine(deletions)}`;
 
 const countOccurrences = (text: string, normalizedQuery: string) => {
   if (!normalizedQuery) {
@@ -853,6 +928,7 @@ type CodeViewItemMetadata = {
   isCollapsed: boolean;
   isSelected: boolean;
   isViewed: boolean;
+  lineCount: DiffLineCount;
   section: DiffSection;
   sectionCount: number;
   walkthroughNote?: WalkthroughNote;
@@ -1196,6 +1272,7 @@ function Sidebar({
   pullRequestSource,
   searchQuery,
   selectedPath,
+  showWhitespace,
   walkthroughAvailable,
   walkthroughError,
   walkthroughLoading,
@@ -1218,6 +1295,7 @@ function Sidebar({
   pullRequestSource: PullRequestSource | null;
   searchQuery: string;
   selectedPath: string | null;
+  showWhitespace: boolean;
   walkthroughAvailable: boolean;
   walkthroughError: string | null;
   walkthroughLoading: boolean;
@@ -1232,6 +1310,20 @@ function Sidebar({
   const suppressSelectionChange = useRef(false);
   const paths = useMemo(() => files.map((file) => file.path), [files]);
   const filePathSet = useMemo(() => new Set(paths), [paths]);
+  const lineCountsByPath = useMemo(
+    () => new Map(files.map((file) => [file.path, getDiffLineCount(file, showWhitespace)])),
+    [files, showWhitespace],
+  );
+  const lineCountsByPathRef = useRef(lineCountsByPath);
+  const renderTreeRowDecoration = useCallback<FileTreeRowDecorationRenderer>(({ item }) => {
+    const lineCount = lineCountsByPathRef.current.get(item.path);
+    return lineCount?.countable
+      ? {
+          text: formatTreeLineCount(lineCount),
+          title: getDiffLineCountTitle(lineCount),
+        }
+      : null;
+  }, []);
   const status = useMemo(
     () =>
       files.map((file) => ({
@@ -1266,6 +1358,7 @@ function Sidebar({
       }
     },
     paths,
+    renderRowDecoration: renderTreeRowDecoration,
     sort: fileTreeSort,
     unsafeCSS: `
       :host {
@@ -1278,13 +1371,26 @@ function Sidebar({
         border-radius: 14px;
         corner-shape: squircle;
       }
+
+      [data-item-section='decoration'] {
+        color: var(--muted);
+        font: 600 10px/1 var(--font-mono);
+        letter-spacing: 0;
+      }
     `,
   });
 
   useEffect(() => {
     model.resetPaths(paths);
+  }, [model, paths]);
+
+  useEffect(() => {
+    lineCountsByPathRef.current = lineCountsByPath;
+  }, [lineCountsByPath]);
+
+  useEffect(() => {
     model.setGitStatus(status);
-  }, [model, paths, status]);
+  }, [lineCountsByPath, model, status]);
 
   const scrollPathIntoView = useCallback(
     (path: string) => {
@@ -1426,6 +1532,7 @@ function Sidebar({
           files={files}
           onActivatePath={onActivatePath}
           selectedPath={selectedPath}
+          showWhitespace={showWhitespace}
           walkthroughNotes={walkthroughNotes}
           walkthroughSummary={walkthroughSummary}
         />
@@ -1567,12 +1674,14 @@ function WalkthroughSidebar({
   files,
   onActivatePath,
   selectedPath,
+  showWhitespace,
   walkthroughNotes,
   walkthroughSummary,
 }: {
   files: ReadonlyArray<ChangedFile>;
   onActivatePath: (path: string) => void;
   selectedPath: string | null;
+  showWhitespace: boolean;
   walkthroughNotes: ReadonlyMap<string, WalkthroughNote>;
   walkthroughSummary: Walkthrough['summary'] | null;
 }) {
@@ -1624,28 +1733,61 @@ function WalkthroughSidebar({
             <span>{group.title}</span>
             <small>{renderInlineMarkdown(group.reason)}</small>
           </div>
-          {group.files.map(({ file, note }) => (
-            <button
-              className={`walkthrough-file${selectedPath === file.path ? ' selected' : ''}`}
-              key={file.path}
-              onClick={() => onActivatePath(file.path)}
-              title={note?.reason ?? file.path}
-              type="button"
-            >
-              <span className="walkthrough-file-path">{file.path}</span>
-              {note ? (
-                <span className="walkthrough-file-meta">
-                  {walkthroughImpactLabel[note.impact]} · {walkthroughActionLabel[note.action]}
+          {group.files.map(({ file, note }) => {
+            const lineCount = getDiffLineCount(file, showWhitespace);
+            return (
+              <button
+                className={`walkthrough-file${selectedPath === file.path ? ' selected' : ''}`}
+                key={file.path}
+                onClick={() => onActivatePath(file.path)}
+                title={note?.reason ?? file.path}
+                type="button"
+              >
+                <span className="walkthrough-file-title">
+                  <span className="walkthrough-file-path">{file.path}</span>
+                  <DiffLineCountBadge className="walkthrough-line-count" lineCount={lineCount} />
                 </span>
-              ) : null}
-              <span className="walkthrough-file-reason">
-                {renderInlineMarkdown(note?.context ?? note?.reason ?? 'Review this changed file.')}
-              </span>
-            </button>
-          ))}
+                {note ? (
+                  <span className="walkthrough-file-meta">
+                    {walkthroughImpactLabel[note.impact]} · {walkthroughActionLabel[note.action]}
+                  </span>
+                ) : null}
+                <span className="walkthrough-file-reason">
+                  {renderInlineMarkdown(
+                    note?.context ?? note?.reason ?? 'Review this changed file.',
+                  )}
+                </span>
+              </button>
+            );
+          })}
         </section>
       ))}
     </div>
+  );
+}
+
+function DiffLineCountBadge({
+  className = 'codiff-line-count',
+  lineCount,
+}: {
+  className?: string;
+  lineCount: DiffLineCount;
+}) {
+  if (!lineCount.countable) {
+    return null;
+  }
+
+  return (
+    <span
+      aria-label={getDiffLineCountTitle(lineCount)}
+      className={className}
+      title={getDiffLineCountTitle(lineCount)}
+    >
+      <span className="codiff-line-count-added">+{formatLineCountNumber(lineCount.additions)}</span>
+      <span className="codiff-line-count-deleted">
+        -{formatLineCountNumber(lineCount.deletions)}
+      </span>
+    </span>
   );
 }
 
@@ -1660,7 +1802,16 @@ function CodeViewHeader({
   onToggleCollapsed: (file: ChangedFile, isCollapsed: boolean) => void;
   onToggleViewed: (file: ChangedFile, isViewed: boolean) => void;
 }) {
-  const { file, isCollapsed, isSelected, isViewed, section, sectionCount, walkthroughNote } = meta;
+  const {
+    file,
+    isCollapsed,
+    isSelected,
+    isViewed,
+    lineCount,
+    section,
+    sectionCount,
+    walkthroughNote,
+  } = meta;
   const canOpenFile = file.status !== 'deleted';
 
   return (
@@ -1693,6 +1844,7 @@ function CodeViewHeader({
           </span>
         ) : null}
       </button>
+      <DiffLineCountBadge lineCount={lineCount} />
       <div className={`codiff-status-badge ${file.status}`}>{statusLabel[file.status]}</div>
       <button
         className="codiff-open-button"
@@ -2006,6 +2158,7 @@ function ReviewCodeView({
       const isViewed = viewed[file.path] === file.fingerprint;
       const isCollapsed = collapsed.has(file.path) && !forceExpandedPaths.has(file.path);
       const visibleSections = getVisibleDiffSections(file, showWhitespace);
+      const lineCount = getDiffLineCountFromVisibleSections(visibleSections);
       const sections = isCollapsed ? visibleSections.slice(0, 1) : visibleSections;
 
       for (const [index, { fileDiff, section }] of sections.entries()) {
@@ -2037,6 +2190,7 @@ function ReviewCodeView({
           isCollapsed,
           isSelected: selectedPath === file.path,
           isViewed,
+          lineCount,
           section,
           sectionCount: file.sections.length,
           walkthroughNote: walkthroughNotes.get(file.path),
@@ -3867,6 +4021,7 @@ export default function App() {
           pullRequestSource={historyPullRequestSource}
           searchQuery={sidebarMode === 'history' ? historySearchQuery : fileSearchQuery}
           selectedPath={visibleSelectedPath}
+          showWhitespace={showWhitespace}
           walkthroughAvailable={walkthrough != null}
           walkthroughError={walkthroughError}
           walkthroughLoading={walkthroughLoading}

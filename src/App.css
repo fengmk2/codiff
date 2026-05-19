@@ -27,6 +27,8 @@
     --app-bg: #f8f8f6;
     --code-bg: #ffffff;
     --danger: #a33a3a;
+    --diff-addition: rgb(31 122 68);
+    --diff-deletion: rgb(184 49 47);
     --file-bg: rgb(255 255 255 / 0.78);
     --file-border: rgb(17 17 17 / 0.09);
     --inline-code-bg: rgb(242 242 242);
@@ -47,6 +49,8 @@
       --app-bg: #141414;
       --code-bg: #1c1c1c;
       --danger: #e07878;
+      --diff-addition: rgb(111 208 148);
+      --diff-deletion: rgb(238 126 126);
       --file-bg: rgb(38 38 38 / 0.72);
       --file-border: rgb(230 230 230 / 0.1);
       --inline-code-bg: rgb(39 39 39);
@@ -593,6 +597,14 @@
   width: 100%;
 }
 
+.walkthrough-file-title {
+  align-items: center;
+  display: grid;
+  gap: 6px;
+  grid-template-columns: minmax(0, 1fr) max-content;
+  min-width: 0;
+}
+
 .walkthrough-file:hover,
 .walkthrough-file.selected {
   background: color-mix(in srgb, var(--tree-selection-bg) 46%, transparent);
@@ -618,6 +630,18 @@
   overflow: hidden;
   padding: 4px 6px;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.walkthrough-line-count {
+  background: rgb(127 127 127 / 0.1);
+  border-radius: 6px;
+  corner-shape: squircle;
+  display: inline-flex;
+  flex: none;
+  font: 700 10px/1 var(--font-mono);
+  gap: 5px;
+  padding: 5px 6px;
   white-space: nowrap;
 }
 
@@ -694,7 +718,7 @@
   display: grid;
   gap: 10px;
   height: 54px;
-  grid-template-columns: minmax(0, 1fr) max-content max-content max-content;
+  grid-template-columns: minmax(0, 1fr) max-content max-content max-content max-content;
   min-width: 0;
   padding: 9px 10px;
   transition: border-radius 120ms ease;
@@ -823,6 +847,7 @@
 
 .codiff-status-badge,
 .codiff-section-badge,
+.codiff-line-count,
 .codiff-open-button,
 .codiff-viewed-button {
   border-radius: 14px;
@@ -832,11 +857,27 @@
 }
 
 .codiff-status-badge,
-.codiff-section-badge {
+.codiff-section-badge,
+.codiff-line-count {
   background: rgb(127 127 127 / 0.11);
   color: var(--muted);
   padding: 5px 9px;
   white-space: nowrap;
+}
+
+.codiff-line-count {
+  display: inline-flex;
+  font-family: var(--font-mono);
+  gap: 8px;
+  line-height: 1;
+}
+
+.codiff-line-count-added {
+  color: var(--diff-addition);
+}
+
+.codiff-line-count-deleted {
+  color: var(--diff-deletion);
 }
 
 .codiff-status-badge.added,

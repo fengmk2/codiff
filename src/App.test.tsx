@@ -2,6 +2,7 @@ import { expect, test } from 'vite-plus/test';
 import {
   buildReviewCommentsMarkdown,
   fileHasVisibleDiff,
+  getDiffLineCount,
   getDiffSearchResult,
   getRepositoryLoadError,
   getVisibleDiffSections,
@@ -104,6 +105,76 @@ test('diff search includes file path matches', () => {
   expect(getDiffSearchResult(file, false, 'needle')?.matches[0]).toEqual({
     filePath: 'src/needle.ts',
     itemId: 'diff:src/needle.ts:unstaged',
+  });
+});
+
+test('diff line counts include additions and deletions across sections', () => {
+  const file = {
+    fingerprint: 'line-counts',
+    path: 'src/counts.ts',
+    sections: [
+      {
+        binary: false,
+        id: 'src/counts.ts:staged',
+        kind: 'staged',
+        newFile: {
+          contents: 'one\nthree\nfour\n',
+          name: 'src/counts.ts',
+        },
+        oldFile: {
+          contents: 'one\ntwo\n',
+          name: 'src/counts.ts',
+        },
+        patch: '',
+      },
+      {
+        binary: false,
+        id: 'src/counts.ts:unstaged',
+        kind: 'unstaged',
+        newFile: {
+          contents: 'one\nthree\nfour\nfive\n',
+          name: 'src/counts.ts',
+        },
+        oldFile: {
+          contents: 'one\nthree\nfour\n',
+          name: 'src/counts.ts',
+        },
+        patch: '',
+      },
+    ],
+    status: 'modified',
+  } satisfies ChangedFile;
+
+  expect(getDiffLineCount(file, false)).toEqual({
+    additions: 3,
+    countable: true,
+    deletions: 1,
+  });
+});
+
+test('diff line counts omit binary summary rows', () => {
+  const file = {
+    fingerprint: 'binary-counts',
+    path: 'image.png',
+    sections: [
+      {
+        binary: true,
+        id: 'image.png:unstaged',
+        kind: 'unstaged',
+        loadState: 'binary',
+        patch: '',
+        summary: {
+          reason: 'Binary file changed.',
+        },
+      },
+    ],
+    status: 'modified',
+  } satisfies ChangedFile;
+
+  expect(getDiffLineCount(file, false)).toEqual({
+    additions: 0,
+    countable: false,
+    deletions: 0,
   });
 });
 
