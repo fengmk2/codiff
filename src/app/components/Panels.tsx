@@ -103,6 +103,36 @@ export function RepositoryLoadErrorPanel({ error }: { error: RepositoryLoadError
   );
 }
 
+export function CodexUnavailablePanel({ onShowFiles }: { onShowFiles: () => void }) {
+  return (
+    <>
+      <strong>Codex CLI not found</strong>
+      <p>
+        Install Codex, then verify <code className="walkthrough-inline-code">codex --version</code>{' '}
+        works in Terminal.
+      </p>
+      <p>
+        Codiff checks <code className="walkthrough-inline-code">PATH</code>,{' '}
+        <code className="walkthrough-inline-code">/opt/homebrew/bin/codex</code>, and{' '}
+        <code className="walkthrough-inline-code">/usr/local/bin/codex</code>. It does not run shell
+        startup files.
+      </p>
+      <p>
+        If Codex is somewhere else, launch Codiff with{' '}
+        <code className="walkthrough-inline-code">
+          CODIFF_CODEX_PATH=/absolute/path/to/codex codiff -w
+        </code>
+        .
+      </p>
+      <div className="empty-panel-actions">
+        <button onClick={onShowFiles} type="button">
+          Review Files
+        </button>
+      </div>
+    </>
+  );
+}
+
 export function DiffSearchPanel({
   activeIndex,
   focusRequest,

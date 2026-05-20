@@ -8,6 +8,7 @@ import {
 } from 'react';
 import {
   CopyCommentsButton,
+  CodexUnavailablePanel,
   DiffSearchPanel,
   FirstRunPanel,
   PullRequestReviewButtons,
@@ -31,6 +32,7 @@ import {
   type ReviewComment,
   type SidebarMode,
   type SourceSession,
+  type WalkthroughError,
 } from './lib/app-types.ts';
 import { DEFAULT_PADDING } from './lib/code-view-options.ts';
 import { getDiffSearchResult } from './lib/diff-search.ts';
@@ -102,7 +104,7 @@ export default function App() {
   );
   const [viewed, setViewed] = useState<Record<string, string>>({});
   const [walkthrough, setWalkthrough] = useState<Walkthrough | null>(null);
-  const [walkthroughError, setWalkthroughError] = useState<string | null>(null);
+  const [walkthroughError, setWalkthroughError] = useState<WalkthroughError | null>(null);
   const [walkthroughLoading, setWalkthroughLoading] = useState(false);
   const [walkthroughUnread, setWalkthroughUnread] = useState(false);
   const historyRequestRef = useRef(0);
@@ -119,7 +121,7 @@ export default function App() {
   const sourceRequestRef = useRef(0);
   const viewedRef = useRef<Record<string, string>>({});
   const walkthroughRef = useRef<Walkthrough | null>(null);
-  const walkthroughErrorRef = useRef<string | null>(null);
+  const walkthroughErrorRef = useRef<WalkthroughError | null>(null);
 
   const bumpItemVersion = useCallback((path: string) => {
     setItemVersionByPath((current) => ({
@@ -200,8 +202,10 @@ export default function App() {
         walkthroughResult?.status === 'ready' ? walkthroughResult.walkthrough : null;
 
       if (walkthroughResult?.status === 'unavailable') {
-        setWalkthroughError(walkthroughResult.reason);
-        setSidebarMode('tree');
+        setWalkthroughError(walkthroughResult);
+        if (walkthroughResult.code !== 'CODEX_NOT_FOUND') {
+          setSidebarMode('tree');
+        }
       } else {
         setWalkthroughError(null);
       }
@@ -926,8 +930,8 @@ export default function App() {
               setWalkthroughUnread(true);
             }
           } else {
-            setWalkthroughError(result.reason);
-            if (sidebarModeRef.current === 'walkthrough') {
+            setWalkthroughError(result);
+            if (sidebarModeRef.current === 'walkthrough' && result.code !== 'CODEX_NOT_FOUND') {
               setSidebarMode('tree');
             }
           }
@@ -937,7 +941,10 @@ export default function App() {
             return;
           }
 
-          setWalkthroughError(error instanceof Error ? error.message : String(error));
+          setWalkthroughError({
+            reason: error instanceof Error ? error.message : String(error),
+            status: 'unavailable',
+          });
           if (sidebarModeRef.current === 'walkthrough') {
             setSidebarMode('tree');
           }
@@ -1346,6 +1353,11 @@ export default function App() {
   const hasDiffSearchQuery = diffSearchQuery.trim().length > 0;
   const isPullRequest = state.source.type === 'pull-request';
   const isSwitchingSource = pendingSource != null;
+  const showCodexUnavailablePanel =
+    sidebarMode === 'walkthrough' &&
+    !walkthrough &&
+    !walkthroughLoading &&
+    walkthroughError?.code === 'CODEX_NOT_FOUND';
 
   return (
     <div
@@ -1423,6 +1435,12 @@ export default function App() {
       <main className="review">
         {isSwitchingSource ? (
           <ReviewSourceLoading />
+        ) : showCodexUnavailablePanel ? (
+          <div className="empty-state">
+            <div className="empty-panel squircle">
+              <CodexUnavailablePanel onShowFiles={() => setSidebarMode('tree')} />
+            </div>
+          </div>
         ) : state.files.length === 0 ? (
           <div className="empty-state">
             <div className="empty-panel squircle">

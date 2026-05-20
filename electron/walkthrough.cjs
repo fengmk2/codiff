@@ -1,7 +1,9 @@
 // @ts-check
 
 const {
+  CODEX_NOT_FOUND_CODE,
   cleanText,
+  isCodexNotFoundError,
   normalizeEnum,
   oneLine,
   parseJSONMessage,
@@ -247,10 +249,10 @@ const readWalkthrough = async (state, codexOptions) => {
       walkthrough: normalizeWalkthrough(parsed, state.files),
     };
   } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+    if (isCodexNotFoundError(error)) {
       return {
-        reason:
-          'Codex is not installed locally. Install and use Codex, then try Walkthrough again.',
+        code: CODEX_NOT_FOUND_CODE,
+        reason: error instanceof Error ? error.message : String(error),
         status: 'unavailable',
       };
     }

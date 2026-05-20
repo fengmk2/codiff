@@ -1,6 +1,12 @@
 // @ts-check
 
-const { parseJSONMessage, runCodex, truncate } = require('./codex.cjs');
+const {
+  CODEX_NOT_FOUND_CODE,
+  isCodexNotFoundError,
+  parseJSONMessage,
+  runCodex,
+  truncate,
+} = require('./codex.cjs');
 
 const MAX_PATCH_CHARS = 24_000;
 const MAX_OTHER_FILES = 40;
@@ -135,10 +141,10 @@ const readReviewAssistantReply = async (state, request, codexOptions) => {
       status: 'ready',
     };
   } catch (error) {
-    if (error && typeof error === 'object' && 'code' in error && error.code === 'ENOENT') {
+    if (isCodexNotFoundError(error)) {
       return {
-        reason:
-          'Codex is not installed locally. Install and use Codex, then ask from this comment again.',
+        code: CODEX_NOT_FOUND_CODE,
+        reason: error instanceof Error ? error.message : String(error),
         status: 'unavailable',
       };
     }

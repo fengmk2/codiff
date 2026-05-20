@@ -7,7 +7,7 @@ Codiff is a beautiful, minimal, local diff viewer for reviewing staged and unsta
 ## Why Codiff
 
 - **Fast Local Reviews:** See changes in any Git repository to review code before committing.
-- **LLM Walkthroughs:** Run `codiff -w` to ask Codex to give your a review order and more context.
+- **LLM Walkthroughs:** Run `codiff -w` to ask Codex to give you a review order and more context.
 - **Inline Review Comments:** Comment directly on changed lines and copy all review comments as Markdown for follow-ups.
 
 ## Download
@@ -48,6 +48,23 @@ codiff -w a1b2c3d
 ```
 
 Launching Codiff in multiple repositories opens a separate native window for each repository.
+
+## Codex Walkthroughs
+
+Codiff uses the local Codex CLI for walkthroughs and inline review assistance. Install Codex and
+verify it is available before using `codiff -w`:
+
+```bash
+codex --version
+```
+
+Codiff looks for Codex on `PATH`, `/opt/homebrew/bin/codex`, and `/usr/local/bin/codex`. It does not
+run your shell startup files to discover Codex. If Codex is installed somewhere else, launch Codiff
+with an explicit path:
+
+```bash
+CODIFF_CODEX_PATH=/absolute/path/to/codex codiff -w
+```
 
 ## Development
 

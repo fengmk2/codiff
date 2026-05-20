@@ -5,6 +5,7 @@ import type {
   DiffLineCount,
   PullRequestSource,
   SidebarMode,
+  WalkthroughError,
   WalkthroughNote,
 } from '../../lib/app-types.ts';
 import {
@@ -61,7 +62,7 @@ export function Sidebar({
   selectedPath: string | null;
   showWhitespace: boolean;
   walkthroughAvailable: boolean;
-  walkthroughError: string | null;
+  walkthroughError: WalkthroughError | null;
   walkthroughLoading: boolean;
   walkthroughNotes: ReadonlyMap<string, WalkthroughNote>;
   walkthroughSummary: Walkthrough['summary'] | null;
@@ -309,9 +310,9 @@ export function Sidebar({
               </div>
             </div>
           ) : walkthroughError ? (
-            <div className="sidebar-walkthrough-status" title={walkthroughError}>
+            <div className="sidebar-walkthrough-status" title={walkthroughError.reason}>
               <strong>Walkthrough unavailable</strong>
-              <span>{walkthroughError}</span>
+              <span>{walkthroughError.reason}</span>
             </div>
           ) : null}
           {!walkthroughLoading ? (

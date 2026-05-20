@@ -3,12 +3,18 @@ import { expect, test } from 'vite-plus/test';
 
 const require = createRequire(import.meta.url);
 const {
+  CODEX_NOT_FOUND_CODE,
+  CODEX_NOT_FOUND_MESSAGE,
   DEFAULT_OPENAI_MODEL,
+  getCodexCommand,
   getCodexLaunchErrorMessage,
   isOpenAIModelAvailabilityError,
   normalizeOpenAIModel,
 } = require('../codex.cjs') as {
+  CODEX_NOT_FOUND_CODE: string;
+  CODEX_NOT_FOUND_MESSAGE: string;
   DEFAULT_OPENAI_MODEL: string;
+  getCodexCommand: () => string;
   getCodexLaunchErrorMessage: (error: unknown, platform?: NodeJS.Platform) => string;
   isOpenAIModelAvailabilityError: (value: string) => boolean;
   normalizeOpenAIModel: (value: unknown) => string;
@@ -53,4 +59,34 @@ test('explains macOS Codex CLI security blocks', () => {
   expect(getCodexLaunchErrorMessage(new Error('spawn codex EACCES'), 'linux')).toBe(
     'spawn codex EACCES',
   );
+});
+
+test('explains missing Codex CLI launches', () => {
+  expect(
+    getCodexLaunchErrorMessage(
+      Object.assign(new Error('spawn codex ENOENT'), {
+        code: 'ENOENT',
+      }),
+    ),
+  ).toBe(CODEX_NOT_FOUND_MESSAGE);
+});
+
+test('rejects invalid explicit Codex CLI overrides', () => {
+  const previousCodexPath = process.env.CODIFF_CODEX_PATH;
+  process.env.CODIFF_CODEX_PATH = '/tmp/codiff-missing-codex';
+
+  try {
+    expect(() => getCodexCommand()).toThrow('CODIFF_CODEX_PATH');
+    try {
+      getCodexCommand();
+    } catch (error) {
+      expect(error).toMatchObject({ code: CODEX_NOT_FOUND_CODE });
+    }
+  } finally {
+    if (previousCodexPath == null) {
+      delete process.env.CODIFF_CODEX_PATH;
+    } else {
+      process.env.CODIFF_CODEX_PATH = previousCodexPath;
+    }
+  }
 });

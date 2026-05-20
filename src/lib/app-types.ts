@@ -5,7 +5,10 @@ import type {
   PullRequestExistingReviewComment,
   ReviewSource,
   Walkthrough,
+  WalkthroughResult,
 } from '../types.ts';
+
+export type WalkthroughError = Extract<WalkthroughResult, { status: 'unavailable' }>;
 
 export type ReviewCommentAnnotationMetadata = {
   commentIds: ReadonlyArray<string>;
@@ -92,7 +95,7 @@ export type SourceSession = {
   selectedPath: string | null;
   viewed: Record<string, string>;
   walkthrough: Walkthrough | null;
-  walkthroughError: string | null;
+  walkthroughError: WalkthroughError | null;
 };
 
 export type RepositoryLoadError = {

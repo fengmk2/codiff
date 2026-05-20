@@ -114,6 +114,7 @@ export type WalkthroughResult =
       walkthrough: Walkthrough;
     }
   | {
+      code?: 'CODEX_NOT_FOUND';
       reason: string;
       status: 'unavailable';
     };
@@ -145,6 +146,7 @@ export type ReviewAssistantResult =
       status: 'ready';
     }
   | {
+      code?: 'CODEX_NOT_FOUND';
       reason: string;
       status: 'unavailable';
     };
