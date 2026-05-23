@@ -290,6 +290,20 @@ test('formatHelpText includes version and all flags', () => {
   expect(text).toContain('-w');
 });
 
+test('formatHelpText styles titles and descriptions', () => {
+  const text = formatHelpText('1.2.3');
+
+  expect(text).toContain('\u001b[1;34mUsage:\u001b[0m');
+  expect(text).toContain('\u001b[1;34mOptions:\u001b[0m');
+  expect(text).toContain('\u001b[1;34mExamples:\u001b[0m');
+  expect(text).toContain('  --help, -h');
+  expect(text).not.toContain('\u001b[1;34m--help, -h\u001b[0m');
+  expect(text).toContain('\u001b[90mShow this help message and exit.\u001b[0m');
+  expect(text).toContain('  codiff -w');
+  expect(text).not.toContain('\u001b[1;34mcodiff -w\u001b[0m');
+  expect(text).toContain('\u001b[90mStart with an LLM walkthrough.\u001b[0m');
+});
+
 test('codiff-app --help prints help text and exits 0', async () => {
   const { stdout } = await execFileAsync(resolve('bin/codiff-app'), ['--help'], {
     encoding: 'utf8',
@@ -297,6 +311,8 @@ test('codiff-app --help prints help text and exits 0', async () => {
   expect(stdout).toContain('codiff v');
   expect(stdout).toContain('Usage:');
   expect(stdout).toContain('--help');
+  expect(stdout).toContain('\u001b[1;34mUsage:\u001b[0m');
+  expect(stdout).toContain('\u001b[90mShow this help message and exit.\u001b[0m');
 });
 
 test('codiff-app -h prints help text and exits 0', async () => {

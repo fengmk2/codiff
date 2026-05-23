@@ -747,6 +747,7 @@
 
 .sidebar-walkthrough-status.codex strong {
   animation: codex-loading-pulse 1600ms ease-in-out infinite;
+  user-select: none;
 }
 
 .walkthrough-list {
@@ -2060,6 +2061,7 @@
   font-family: var(--font-mono);
   font-size: 13px;
   transform: translateY(-12px);
+  user-select: none;
 }
 
 .loading.codex,

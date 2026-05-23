@@ -22,26 +22,28 @@ codiff_version() {
 
 show_help() {
   version="$(codiff_version)"
-  cat <<EOF
-codiff v${version} — A fast local diff viewer.
+  blue_bold="$(printf '\033[1;34m')"
+  gray="$(printf '\033[90m')"
+  reset="$(printf '\033[0m')"
 
-Usage: codiff [options] [<ref> | <pr> | <url>] [path]
-
-Options:
-  --commit <ref>        Review a specific commit.
-  --help, -h            Show this help message and exit.
-  --version, -v         Show version number and exit.
-  --walkthrough, -w     Start with an LLM-generated review walkthrough.
-
-Examples:
-  codiff                Review staged and unstaged changes.
-  codiff /path/to/repo  Review changes in a specific repository.
-  codiff a1b2c3d        Review a specific commit.
-  codiff '#75'          Review pull request #75.
-  codiff pr 75          Review pull request #75 (alternate syntax).
-  codiff -w             Start with an LLM walkthrough.
-  codiff -w a1b2c3d     Walkthrough a specific commit.
-EOF
+  printf '%s\n' "${blue_bold}codiff v${version}${reset} ${gray}A fast local diff viewer.${reset}"
+  printf '\n'
+  printf '%s\n' "${blue_bold}Usage:${reset} ${gray}codiff [options] [<ref> | <pr> | <url>] [path]${reset}"
+  printf '\n'
+  printf '%s\n' "${blue_bold}Options:${reset}"
+  printf '  %-22s%s%s%s\n' "--commit <ref>" "$gray" "Review a specific commit." "$reset"
+  printf '  %-22s%s%s%s\n' "--help, -h" "$gray" "Show this help message and exit." "$reset"
+  printf '  %-22s%s%s%s\n' "--version, -v" "$gray" "Show version number and exit." "$reset"
+  printf '  %-22s%s%s%s\n' "--walkthrough, -w" "$gray" "Start with an LLM-generated review walkthrough." "$reset"
+  printf '\n'
+  printf '%s\n' "${blue_bold}Examples:${reset}"
+  printf '  %-22s%s%s%s\n' "codiff" "$gray" "Review staged and unstaged changes." "$reset"
+  printf '  %-22s%s%s%s\n' "codiff /path/to/repo" "$gray" "Review changes in a specific repository." "$reset"
+  printf '  %-22s%s%s%s\n' "codiff a1b2c3d" "$gray" "Review a specific commit." "$reset"
+  printf '  %-22s%s%s%s\n' "codiff '#75'" "$gray" "Review pull request #75." "$reset"
+  printf '  %-22s%s%s%s\n' "codiff pr 75" "$gray" "Review pull request #75 (alternate syntax)." "$reset"
+  printf '  %-22s%s%s%s\n' "codiff -w" "$gray" "Start with an LLM walkthrough." "$reset"
+  printf '  %-22s%s%s%s\n' "codiff -w a1b2c3d" "$gray" "Walkthrough a specific commit." "$reset"
 }
 
 repository_path=""

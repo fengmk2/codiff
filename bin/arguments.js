@@ -34,6 +34,15 @@ const parseArgsOptions = Object.fromEntries(
   flagDefinitions.map(({ name, short, type }) => [name, { type, ...(short ? { short } : {}) }]),
 );
 
+const ansi = {
+  blueBold: '\u001b[1;34m',
+  gray: '\u001b[90m',
+  reset: '\u001b[0m',
+};
+
+const blueBold = (text) => `${ansi.blueBold}${text}${ansi.reset}`;
+const gray = (text) => `${ansi.gray}${text}${ansi.reset}`;
+
 export const formatHelpText = (version) => {
   const flagLines = flagDefinitions.map(({ argument, description, name, short }) => {
     const label = `--${name}${argument ? ` ${argument}` : ''}${short ? `, -${short}` : ''}`;
@@ -44,16 +53,20 @@ export const formatHelpText = (version) => {
   const examplePad = Math.max(...usageExamples.map(({ command }) => command.length)) + 2;
 
   const lines = [
-    `codiff v${version} — A fast local diff viewer.`,
+    `${blueBold(`codiff v${version}`)} ${gray('A fast local diff viewer.')}`,
     '',
-    'Usage: codiff [options] [<ref> | <pr> | <url>] [path]',
+    `${blueBold('Usage:')} ${gray('codiff [options] [<ref> | <pr> | <url>] [path]')}`,
     '',
-    'Options:',
-    ...flagLines.map(({ description, label }) => `  ${label.padEnd(flagPad)}${description}`),
+    blueBold('Options:'),
+    ...flagLines.map(
+      ({ description, label }) =>
+        `  ${label}${' '.repeat(flagPad - label.length)}${gray(description)}`,
+    ),
     '',
-    'Examples:',
+    blueBold('Examples:'),
     ...usageExamples.map(
-      ({ command, description }) => `  ${command.padEnd(examplePad)}${description}`,
+      ({ command, description }) =>
+        `  ${command}${' '.repeat(examplePad - command.length)}${gray(description)}`,
     ),
     '',
   ];

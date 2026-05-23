@@ -1852,9 +1852,13 @@ export default function App() {
               <strong>
                 {state.source.type === 'commit' ? 'No changes in commit' : 'No local changes'}
               </strong>
-              <span>
-                {state.source.type === 'commit' ? getShortRef(state.source.ref) : state.root}
-              </span>
+              {state.source.type === 'commit' ? (
+                <span>{getShortRef(state.source.ref)}</span>
+              ) : (
+                <code className="walkthrough-inline-code" title={state.root}>
+                  {compactPath(state.root)}
+                </code>
+              )}
             </div>
           </div>
         ) : visibleFiles.length === 0 ? (
