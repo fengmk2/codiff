@@ -90,6 +90,11 @@ const { getTerminalHelperStatus, installTerminalHelper } = createTerminalHelper(
 });
 const { openFileInEditor } = createEditorOpener({ shell });
 
+const openConfigFile = async () => {
+  initConfig();
+  await openFileInEditor(getConfigPath());
+};
+
 const sendConfigChanged = () => {
   for (const window of BrowserWindow.getAllWindows()) {
     if (!window.isDestroyed()) {
@@ -261,6 +266,13 @@ const buildApplicationMenu = () =>
                 },
                 { type: 'separator' },
                 {
+                  click: () => {
+                    void openConfigFile();
+                  },
+                  label: 'Open Config File...',
+                },
+                { type: 'separator' },
+                {
                   click:
                     /** @type {NonNullable<import('electron').MenuItemConstructorOptions['click']>} */ (
                       (_menuItem, browserWindow) => installTerminalHelper(browserWindow)
@@ -286,6 +298,13 @@ const buildApplicationMenu = () =>
                 {
                   label: 'OpenAI Model',
                   submenu: buildOpenAIModelSubmenu(),
+                },
+                { type: 'separator' },
+                {
+                  click: () => {
+                    void openConfigFile();
+                  },
+                  label: 'Open Config File...',
                 },
                 { type: 'separator' },
               ]),
@@ -367,14 +386,6 @@ const buildApplicationMenu = () =>
                 type: 'radio',
               },
             ],
-          },
-          { type: 'separator' },
-          {
-            click: () => {
-              initConfig();
-              shell.openPath(getConfigPath());
-            },
-            label: 'Open Config File...',
           },
           { type: 'separator' },
           { role: 'togglefullscreen' },
@@ -702,10 +713,7 @@ ipcMain.handle('codiff:getPreferences', () => configToPreferences(config));
 
 ipcMain.handle('codiff:getConfig', () => config);
 
-ipcMain.handle('codiff:openConfigFile', () => {
-  initConfig();
-  shell.openPath(getConfigPath());
-});
+ipcMain.handle('codiff:openConfigFile', () => openConfigFile());
 
 ipcMain.handle('codiff:openFile', async (event, filePath) => {
   const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();

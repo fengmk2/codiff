@@ -6,8 +6,8 @@ const { execFile } = require('node:child_process');
  * @typedef {{args: Array<string>; command: string}} EditorCommand
  */
 
-/** @param {{shell: import('electron').Shell}} options */
-const createEditorOpener = ({ shell }) => {
+/** @param {{platform?: NodeJS.Platform; shell: import('electron').Shell}} options */
+const createEditorOpener = ({ platform = process.platform, shell }) => {
   /** @param {string} command */
   const parseEditorCommand = (command) =>
     command.match(/"[^"]+"|'[^']+'|\S+/g)?.map((part) => part.replace(/^['"]|['"]$/g, '')) ?? [];
@@ -47,9 +47,13 @@ const createEditorOpener = ({ shell }) => {
       });
     }
 
-    if (process.platform === 'darwin') {
+    if (platform === 'darwin') {
       commands.push({
         args: ['-a', 'Visual Studio Code', absolutePath],
+        command: 'open',
+      });
+      commands.push({
+        args: ['-t', absolutePath],
         command: 'open',
       });
     }
