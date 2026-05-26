@@ -270,33 +270,30 @@ const runCodex = async (
         let finished = false;
 
         const codexCommand = getCodexCommand();
-        const child = spawn(
-          codexCommand,
-          [
-            'exec',
-            '-m',
-            codexModel,
-            '-c',
-            `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`,
-            '--cd',
-            repoRoot,
-            '--sandbox',
-            'read-only',
-            '--ephemeral',
-            '--ignore-rules',
-            '--color',
-            'never',
-            '--output-schema',
-            schemaPath,
-            '--output-last-message',
-            outputPath,
-            '-',
-          ],
-          {
-            env: process.env,
-            stdio: ['pipe', 'pipe', 'pipe'],
-          },
-        );
+        const codexArgs = [
+          'exec',
+          '-m',
+          codexModel,
+          '-c',
+          `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`,
+          '--cd',
+          repoRoot,
+          '--sandbox',
+          'read-only',
+          '--ephemeral',
+          '--ignore-rules',
+          '--color',
+          'never',
+          '--output-schema',
+          schemaPath,
+          '--output-last-message',
+          outputPath,
+          '-',
+        ];
+        const child = spawn(codexCommand, codexArgs, {
+          env: process.env,
+          stdio: ['pipe', 'pipe', 'pipe'],
+        });
 
         const timer = setTimeout(() => {
           if (!finished) {

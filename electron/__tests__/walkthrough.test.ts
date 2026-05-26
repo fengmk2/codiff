@@ -2,7 +2,16 @@ import { createRequire } from 'node:module';
 import { expect, test } from 'vite-plus/test';
 
 const require = createRequire(import.meta.url);
-const { normalizeWalkthrough } = require('../walkthrough.cjs') as {
+const { buildPrompt, normalizeWalkthrough } = require('../walkthrough.cjs') as {
+  buildPrompt: (
+    state: unknown,
+    context?: {
+      messages?: ReadonlyArray<{ role: 'assistant' | 'user'; text: string }>;
+      objective?: string;
+      source: { generatedAt: string; threadId?: string; type: string };
+      version: 1;
+    },
+  ) => string;
   normalizeWalkthrough: (
     input: unknown,
     files: ReadonlyArray<{ path: string }>,
@@ -25,6 +34,44 @@ const { normalizeWalkthrough } = require('../walkthrough.cjs') as {
     version: 1;
   };
 };
+
+test('includes Codex conversation context in walkthrough prompts', () => {
+  const prompt = buildPrompt(
+    {
+      files: [
+        {
+          fingerprint: 'abc',
+          path: 'src/types.ts',
+          sections: [],
+          status: 'modified',
+        },
+      ],
+      generatedAt: 1,
+      root: '/repo',
+      source: { type: 'working-tree' },
+    },
+    {
+      objective: 'Make Codiff walkthroughs reuse the creating Codex session.',
+      messages: [
+        {
+          role: 'user',
+          text: 'The skill should only pass the session id to Codiff.',
+        },
+      ],
+      source: {
+        generatedAt: '2026-05-25T00:00:00.000Z',
+        threadId: '019e5e57-e7d6-7392-9ad1-ad959319d2fb',
+        type: 'codex-session',
+      },
+      version: 1,
+    },
+  );
+
+  expect(prompt).toContain('Codex conversation context:');
+  expect(prompt).toContain('Make Codiff walkthroughs reuse the creating Codex session.');
+  expect(prompt).toContain('The skill should only pass the session id to Codiff.');
+  expect(prompt).toContain('Treat the repository change digest as the source of truth');
+});
 
 test('normalizes review leverage walkthrough fields', () => {
   const walkthrough = normalizeWalkthrough(

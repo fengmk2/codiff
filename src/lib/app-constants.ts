@@ -1,10 +1,20 @@
-import type { CodiffLaunchOptions, CodiffPreferences, TerminalHelperStatus } from '../types.ts';
+import type {
+  CodexSkillStatus,
+  CodiffLaunchOptions,
+  CodiffPreferences,
+  TerminalHelperStatus,
+} from '../types.ts';
 
 export const HISTORY_PAGE_SIZE = 30;
 
 export const defaultLaunchOptions: CodiffLaunchOptions = {
   repositoryPathProvided: false,
   walkthrough: false,
+};
+
+export const defaultCodexSkillStatus: CodexSkillStatus = {
+  installed: false,
+  path: '',
 };
 
 export const defaultTerminalHelperStatus: TerminalHelperStatus = {

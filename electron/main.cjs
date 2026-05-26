@@ -38,6 +38,7 @@ const {
   writeConfig,
 } = require('./config.cjs');
 const { readReviewAssistantReply } = require('./review-assist.cjs');
+const { readCodexSessionContext } = require('./codex-session-context.cjs');
 const {
   findMatchingWindowIdentity,
   getWindowIdentity,
@@ -51,6 +52,7 @@ const {
   getLaunchOptions,
   getLaunchPath,
 } = require('./main/command-line.cjs');
+const { createCodexSkillInstaller } = require('./main/codex-skill.cjs');
 const { createEditorOpener } = require('./main/editor.cjs');
 const { createTerminalHelper } = require('./main/terminal-helper.cjs');
 const {
@@ -88,6 +90,11 @@ const pendingCommentsClipboardController = createPendingCommentsClipboardControl
 /** @type {CodiffConfig} */
 let config = defaultConfig;
 
+const { getCodexSkillStatus, installCodexSkill } = createCodexSkillInstaller({
+  app,
+  dialog,
+  root,
+});
 const { getTerminalHelperStatus, installTerminalHelper } = createTerminalHelper({
   app,
   dialog,
@@ -144,6 +151,28 @@ const getCodexOptions = () => ({
     updateConfig({ settings: { ...config.settings, openAIModel: fallbackModel } });
   },
 });
+
+/**
+ * @param {import('../src/types.ts').WalkthroughContext | null | undefined} providedContext
+ * @param {import('../src/types.ts').WalkthroughContext | null | undefined} sessionContext
+ */
+const mergeWalkthroughContexts = (providedContext, sessionContext) => {
+  if (!providedContext) {
+    return sessionContext;
+  }
+
+  if (!sessionContext) {
+    return providedContext;
+  }
+
+  return {
+    ...sessionContext,
+    ...providedContext,
+    messages: sessionContext.messages,
+    risks: [...(sessionContext.risks || []), ...(providedContext.risks || [])],
+    source: sessionContext.source,
+  };
+};
 
 /** @param {CodiffTheme} theme */
 const updateTheme = (theme) => {
@@ -284,6 +313,13 @@ const buildApplicationMenu = () =>
                     ),
                   label: 'Install Terminal Helper',
                 },
+                {
+                  click:
+                    /** @type {NonNullable<import('electron').MenuItemConstructorOptions['click']>} */ (
+                      (_menuItem, browserWindow) => installCodexSkill(browserWindow)
+                    ),
+                  label: 'Install Codex Skill',
+                },
                 { type: 'separator' },
                 { role: 'hide' },
                 { role: 'hideOthers' },
@@ -310,6 +346,21 @@ const buildApplicationMenu = () =>
                     void openConfigFile();
                   },
                   label: 'Open Config File...',
+                },
+                { type: 'separator' },
+                {
+                  click:
+                    /** @type {NonNullable<import('electron').MenuItemConstructorOptions['click']>} */ (
+                      (_menuItem, browserWindow) => installTerminalHelper(browserWindow)
+                    ),
+                  label: 'Install Terminal Helper',
+                },
+                {
+                  click:
+                    /** @type {NonNullable<import('electron').MenuItemConstructorOptions['click']>} */ (
+                      (_menuItem, browserWindow) => installCodexSkill(browserWindow)
+                    ),
+                  label: 'Install Codex Skill',
                 },
                 { type: 'separator' },
               ]),
@@ -687,6 +738,13 @@ ipcMain.handle(
     },
 );
 
+ipcMain.handle('codiff:getCodexSkillStatus', () => getCodexSkillStatus());
+
+ipcMain.handle('codiff:installCodexSkill', async (event) => {
+  await installCodexSkill(BrowserWindow.fromWebContents(event.sender));
+  return getCodexSkillStatus();
+});
+
 ipcMain.handle('codiff:getTerminalHelperStatus', () => getTerminalHelperStatus());
 
 ipcMain.handle('codiff:installTerminalHelper', async (event) => {
@@ -698,7 +756,11 @@ ipcMain.handle('codiff:getWalkthrough', async (event, source) => {
   const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();
   const launchOptions = windowLaunchOptions.get(event.sender.id);
   const state = await readRepositoryState(repositoryPath, source || launchOptions?.source);
-  return readWalkthrough(state, getCodexOptions());
+  const walkthroughContext = mergeWalkthroughContexts(
+    launchOptions?.walkthroughContext,
+    readCodexSessionContext(launchOptions?.codexSessionId),
+  );
+  return readWalkthrough(state, getCodexOptions(), walkthroughContext);
 });
 
 ipcMain.handle('codiff:askReviewAssistant', async (event, request) => {

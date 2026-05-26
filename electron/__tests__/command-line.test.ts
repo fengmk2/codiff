@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -10,18 +10,22 @@ const { getInitialRepositoryPath, parseCommandLineArguments, parseGitHubRemoteUr
     getInitialRepositoryPath: (
       launchPath: string,
       launchOptions: {
+        codexSessionId?: string;
         repositoryPathProvided: boolean;
         source?: { ref: string; type: 'commit' } | { type: 'pull-request'; url: string };
         walkthrough: boolean;
+        walkthroughContext?: unknown;
       },
       lastRepositoryPath: string,
       environment?: NodeJS.ProcessEnv,
     ) => string;
     parseCommandLineArguments: (commandLine: ReadonlyArray<string>) => {
       launchOptions: {
+        codexSessionId?: string;
         repositoryPathProvided: boolean;
         source?: { ref: string; type: 'commit' } | { type: 'pull-request'; url: string };
         walkthrough: boolean;
+        walkthroughContext?: unknown;
       };
       pullRequestNumber: number | null;
       repositoryPath: string | null;
@@ -76,6 +80,92 @@ test('parses positional HEAD revisions as commit sources', () => {
     },
     pullRequestNumber: null,
     repositoryPath: '/repo',
+  });
+});
+
+test('parses Codex walkthrough seed command-line options', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codiff-context-'));
+  const contextPath = join(directory, 'seed.json');
+
+  try {
+    await writeFile(
+      contextPath,
+      JSON.stringify({
+        objective: 'Make walkthroughs reuse the creating Codex session.',
+        messages: [
+          {
+            role: 'user',
+            text: 'Open Codiff with the context from this implementation session.',
+          },
+          {
+            role: 'developer',
+            text: 'Internal instruction that should not be included.',
+          },
+          {
+            role: 'assistant',
+            text: 'I wired the skill handoff through launch options.',
+          },
+        ],
+        source: {
+          generatedAt: '2026-05-25T00:00:00.000Z',
+          threadId: 'context-file-thread',
+        },
+        version: 1,
+      }),
+    );
+
+    expect(
+      parseCommandLineArguments([
+        'codiff',
+        '--walkthrough',
+        '--codex-session',
+        'cli-thread',
+        '--walkthrough-context',
+        contextPath,
+        '/repo',
+      ]).launchOptions,
+    ).toEqual({
+      codexSessionId: 'cli-thread',
+      repositoryPathProvided: true,
+      walkthrough: true,
+      walkthroughContext: {
+        messages: [
+          {
+            role: 'user',
+            text: 'Open Codiff with the context from this implementation session.',
+          },
+          {
+            role: 'assistant',
+            text: 'I wired the skill handoff through launch options.',
+          },
+        ],
+        objective: 'Make walkthroughs reuse the creating Codex session.',
+        source: {
+          generatedAt: '2026-05-25T00:00:00.000Z',
+          threadId: 'context-file-thread',
+          type: 'codex-session',
+        },
+        version: 1,
+      },
+    });
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test('parses Codex session ids without creating walkthrough context', () => {
+  expect(
+    parseCommandLineArguments([
+      'codiff',
+      '--walkthrough',
+      '--codex-session',
+      '019e5e57-e7d6-7392-9ad1-ad959319d2fb',
+      '/repo',
+    ]).launchOptions,
+  ).toEqual({
+    codexSessionId: '019e5e57-e7d6-7392-9ad1-ad959319d2fb',
+    repositoryPathProvided: true,
+    walkthrough: true,
   });
 });
 

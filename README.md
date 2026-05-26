@@ -126,6 +126,17 @@ with an explicit path:
 CODIFF_CODEX_PATH=/absolute/path/to/codex codiff -w
 ```
 
+To seed a walkthrough with the Codex conversation that produced the change, choose
+`Codiff > Install Codex Skill`, then invoke it from Codex:
+
+```text
+$codiff
+```
+
+The skill opens Codiff with `codiff -w --codex-session <id>`. Codiff then generates its normal diff
+digest and runs the walkthrough prompt by ephemerally resuming that Codex session, so the
+walkthrough sees the original conversation without a lossy summary handoff.
+
 ## Development
 
 ```bash

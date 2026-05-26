@@ -62,10 +62,16 @@ export function RepositoryChangeBanner({ visible }: { visible: boolean }) {
 }
 
 export function FirstRunPanel({
+  codexSkillInstalled,
+  codexSkillInstalling,
   installing,
+  onInstallCodexSkill,
   onInstallTerminalHelper,
 }: {
+  codexSkillInstalled: boolean;
+  codexSkillInstalling: boolean;
   installing: boolean;
+  onInstallCodexSkill: () => void;
   onInstallTerminalHelper: () => void;
 }) {
   return (
@@ -83,6 +89,11 @@ export function FirstRunPanel({
         <button disabled={installing} onClick={onInstallTerminalHelper} type="button">
           {installing ? 'Installing...' : 'Install Terminal Helper'}
         </button>
+        {!codexSkillInstalled ? (
+          <button disabled={codexSkillInstalling} onClick={onInstallCodexSkill} type="button">
+            {codexSkillInstalling ? 'Installing...' : 'Install Codex Skill'}
+          </button>
+        ) : null}
       </div>
     </>
   );

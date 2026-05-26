@@ -4,6 +4,7 @@ const { execFileSync } = require('node:child_process');
 const { existsSync } = require('node:fs');
 const { resolve } = require('node:path');
 const { parseArgs } = require('node:util');
+const { readWalkthroughContext } = require('../walkthrough-context.cjs');
 
 /**
  * @typedef {import('../../src/types.ts').CodiffLaunchOptions} CodiffLaunchOptions
@@ -155,6 +156,12 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
         short: 'w',
         type: 'boolean',
       },
+      'codex-session': {
+        type: 'string',
+      },
+      'walkthrough-context': {
+        type: 'string',
+      },
     },
     strict: false,
   });
@@ -200,6 +207,18 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
     ? parsePullRequestNumberValue(process.env.CODIFF_PULL_REQUEST_NUMBER || '')
     : null;
   const envPullRequestUrl = useEnvironment ? process.env.CODIFF_PULL_REQUEST_URL || '' : '';
+  const envCodexSessionId = useEnvironment ? process.env.CODIFF_CODEX_SESSION_ID || '' : '';
+  const envWalkthroughContextPath = useEnvironment
+    ? process.env.CODIFF_WALKTHROUGH_CONTEXT || ''
+    : '';
+  const codexSessionId =
+    (typeof values['codex-session'] === 'string' ? values['codex-session'] : '') ||
+    envCodexSessionId ||
+    undefined;
+  const walkthroughContextPath =
+    (typeof values['walkthrough-context'] === 'string' ? values['walkthrough-context'] : '') ||
+    envWalkthroughContextPath ||
+    undefined;
   const sourcePullRequestNumber = envPullRequestNumber ?? pullRequestNumber;
   const sourceRef = envCommitRef || commitRef;
   const sourcePullRequestUrl = envPullRequestUrl || pullRequestUrl;
@@ -208,6 +227,7 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   );
   return {
     launchOptions: {
+      ...(codexSessionId ? { codexSessionId } : {}),
       repositoryPathProvided,
       source: sourcePullRequestUrl
         ? {
@@ -222,6 +242,9 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
           : undefined,
       walkthrough:
         (useEnvironment && process.env.CODIFF_WALKTHROUGH === '1') || values.walkthrough === true,
+      ...(walkthroughContextPath
+        ? { walkthroughContext: readWalkthroughContext(walkthroughContextPath, codexSessionId) }
+        : {}),
     },
     pullRequestNumber: sourcePullRequestNumber,
     repositoryPath,

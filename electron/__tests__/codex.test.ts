@@ -1,4 +1,7 @@
+import { chmod, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { expect, test } from 'vite-plus/test';
 
 const require = createRequire(import.meta.url);
@@ -10,6 +13,7 @@ const {
   getCodexLaunchErrorMessage,
   isOpenAIModelAvailabilityError,
   normalizeOpenAIModel,
+  runCodex,
 } = require('../codex.cjs') as {
   CODEX_NOT_FOUND_CODE: string;
   CODEX_NOT_FOUND_MESSAGE: string;
@@ -18,6 +22,14 @@ const {
   getCodexLaunchErrorMessage: (error: unknown, platform?: NodeJS.Platform) => string;
   isOpenAIModelAvailabilityError: (value: string) => boolean;
   normalizeOpenAIModel: (value: unknown) => string;
+  runCodex: (
+    repoRoot: string,
+    prompt: string,
+    schema: unknown,
+    outputName?: string,
+    timeoutMessage?: string,
+    options?: { model?: string },
+  ) => Promise<string>;
 };
 
 test('normalizes OpenAI model preferences to known models', () => {
@@ -88,5 +100,51 @@ test('rejects invalid explicit Codex CLI overrides', () => {
     } else {
       process.env.CODIFF_CODEX_PATH = previousCodexPath;
     }
+  }
+});
+
+test('runs Codex walkthroughs as fresh ephemeral repository-scoped calls', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codiff-codex-'));
+  const fakeCodexPath = join(directory, 'codex');
+  const argsPath = join(directory, 'args.txt');
+  const previousCodexPath = process.env.CODIFF_CODEX_PATH;
+
+  try {
+    await writeFile(
+      fakeCodexPath,
+      `#!/bin/sh
+for arg in "$@"; do
+  printf '%s\\n' "$arg" >> "${argsPath}"
+done
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--output-last-message" ]; then
+    shift
+    printf '{"version":1}' > "$1"
+    exit 0
+  fi
+  shift
+done
+exit 1
+`,
+    );
+    await chmod(fakeCodexPath, 0o755);
+    process.env.CODIFF_CODEX_PATH = fakeCodexPath;
+
+    await expect(runCodex('/repo', 'prompt', {}, 'walkthrough.json', 'Timed out.')).resolves.toBe(
+      '{"version":1}',
+    );
+
+    const args = (await readFile(argsPath, 'utf8')).trim().split('\n');
+    expect(args).toContain('--ephemeral');
+    expect(args).toContain('--cd');
+    expect(args).toContain('/repo');
+    expect(args).not.toContain('resume');
+  } finally {
+    if (previousCodexPath == null) {
+      delete process.env.CODIFF_CODEX_PATH;
+    } else {
+      process.env.CODIFF_CODEX_PATH = previousCodexPath;
+    }
+    await rm(directory, { force: true, recursive: true });
   }
 });

@@ -77,10 +77,41 @@ export type RepositoryState = {
   source: ReviewSource;
 };
 
+export type WalkthroughContext = {
+  changedFiles?: ReadonlyArray<{
+    path: string;
+    rationale?: string;
+    role: string;
+  }>;
+  constraints?: ReadonlyArray<string>;
+  decisions?: ReadonlyArray<string>;
+  implementationSummary?: string;
+  messages?: ReadonlyArray<{
+    role: 'assistant' | 'user';
+    text: string;
+  }>;
+  objective?: string;
+  risks?: ReadonlyArray<string>;
+  source: {
+    generatedAt: string;
+    threadId?: string;
+    type: 'codex-session' | 'codex-session-excerpt';
+  };
+  validation?: ReadonlyArray<string>;
+  version: 1;
+};
+
 export type CodiffLaunchOptions = {
+  codexSessionId?: string;
   repositoryPathProvided: boolean;
   source?: ReviewSource;
   walkthrough: boolean;
+  walkthroughContext?: WalkthroughContext;
+};
+
+export type CodexSkillStatus = {
+  installed: boolean;
+  path: string;
 };
 
 export type TerminalHelperStatus = {

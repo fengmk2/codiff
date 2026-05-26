@@ -1,5 +1,6 @@
 import type { CodiffConfig } from './config/types.ts';
 import type {
+  CodexSkillStatus,
   CodiffPreferences,
   CodiffLaunchOptions,
   DiffImageContentRequest,
@@ -23,6 +24,7 @@ declare global {
   interface Window {
     codiff: {
       askReviewAssistant: (request: ReviewAssistantRequest) => Promise<ReviewAssistantResult>;
+      getCodexSkillStatus: () => Promise<CodexSkillStatus>;
       getConfig: () => Promise<CodiffConfig>;
       getDiffImageContent: (request: DiffImageContentRequest) => Promise<DiffImageContentResult>;
       getDiffSectionContent: (request: DiffSectionContentRequest) => Promise<DiffSection>;
@@ -33,6 +35,7 @@ declare global {
       getRepositoryState: (source?: ReviewSource) => Promise<RepositoryState>;
       getTerminalHelperStatus: () => Promise<TerminalHelperStatus>;
       getWalkthrough: (source?: ReviewSource) => Promise<WalkthroughResult>;
+      installCodexSkill: () => Promise<CodexSkillStatus>;
       installTerminalHelper: () => Promise<TerminalHelperStatus>;
       onConfigChanged: (callback: (config: CodiffConfig) => void) => () => void;
       onCopyPendingCommentsRequest: (callback: () => string | Promise<string>) => () => void;

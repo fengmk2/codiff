@@ -32,9 +32,11 @@ show_help() {
   printf '\n'
   printf '%s\n' "${blue_bold}Options:${reset}"
   printf '  %-22s%s%s%s\n' "--commit <ref>" "$gray" "Review a specific commit." "$reset"
+  printf '  %-22s%s%s%s\n' "--codex-session <id>" "$gray" "Attach Codex session metadata to a walkthrough." "$reset"
   printf '  %-22s%s%s%s\n' "--help, -h" "$gray" "Show this help message and exit." "$reset"
   printf '  %-22s%s%s%s\n' "--version, -v" "$gray" "Show version number and exit." "$reset"
   printf '  %-22s%s%s%s\n' "--walkthrough, -w" "$gray" "Start with an LLM-generated review walkthrough." "$reset"
+  printf '  %-22s%s%s%s\n' "--walkthrough-context <file>" "$gray" "Seed a walkthrough with Codex conversation context JSON." "$reset"
   printf '\n'
   printf '%s\n' "${blue_bold}Examples:${reset}"
   printf '  %-22s%s%s%s\n' "codiff" "$gray" "Review staged and unstaged changes." "$reset"
@@ -47,10 +49,14 @@ show_help() {
 }
 
 repository_path=""
+codex_session_id=""
 commit_ref=""
 pull_request_source=""
+walkthrough_context_path=""
+expect_codex_session=0
 expect_commit_ref=0
 expect_pull_request_number=0
+expect_walkthrough_context=0
 walkthrough=0
 
 is_commit_ref_arg() {
@@ -76,9 +82,21 @@ is_commit_ref_arg() {
 }
 
 for arg in "$@"; do
+  if [ "$expect_codex_session" -eq 1 ]; then
+    codex_session_id="$arg"
+    expect_codex_session=0
+    continue
+  fi
+
   if [ "$expect_commit_ref" -eq 1 ]; then
     commit_ref="$arg"
     expect_commit_ref=0
+    continue
+  fi
+
+  if [ "$expect_walkthrough_context" -eq 1 ]; then
+    walkthrough_context_path="$arg"
+    expect_walkthrough_context=0
     continue
   fi
 
@@ -103,11 +121,23 @@ for arg in "$@"; do
     --walkthrough|-w)
       walkthrough=1
       ;;
+    --codex-session)
+      expect_codex_session=1
+      ;;
+    --codex-session=*)
+      codex_session_id="${arg#--codex-session=}"
+      ;;
     --commit)
       expect_commit_ref=1
       ;;
     --commit=*)
       commit_ref="${arg#--commit=}"
+      ;;
+    --walkthrough-context)
+      expect_walkthrough_context=1
+      ;;
+    --walkthrough-context=*)
+      walkthrough_context_path="${arg#--walkthrough-context=}"
       ;;
     -*)
       ;;
@@ -134,16 +164,35 @@ case "$repository_path" in
   *) repository_path="$PWD/$repository_path" ;;
 esac
 
+if [ -n "$walkthrough_context_path" ]; then
+  case "$walkthrough_context_path" in
+    /*) ;;
+    *) walkthrough_context_path="$PWD/$walkthrough_context_path" ;;
+  esac
+fi
+
+open_codiff() {
+  if [ -n "$codex_session_id" ] && [ -n "$walkthrough_context_path" ]; then
+    open -n "$app_path" --args --codex-session "$codex_session_id" --walkthrough-context "$walkthrough_context_path" "$@"
+  elif [ -n "$codex_session_id" ]; then
+    open -n "$app_path" --args --codex-session "$codex_session_id" "$@"
+  elif [ -n "$walkthrough_context_path" ]; then
+    open -n "$app_path" --args --walkthrough-context "$walkthrough_context_path" "$@"
+  else
+    open -n "$app_path" --args "$@"
+  fi
+}
+
 if [ -n "$pull_request_source" ] && [ "$walkthrough" -eq 1 ]; then
-  open -n "$app_path" --args --walkthrough "$pull_request_source" "$repository_path"
+  open_codiff --walkthrough "$pull_request_source" "$repository_path"
 elif [ -n "$pull_request_source" ]; then
-  open -n "$app_path" --args "$pull_request_source" "$repository_path"
+  open_codiff "$pull_request_source" "$repository_path"
 elif [ -n "$commit_ref" ] && [ "$walkthrough" -eq 1 ]; then
-  open -n "$app_path" --args --walkthrough --commit "$commit_ref" "$repository_path"
+  open_codiff --walkthrough --commit "$commit_ref" "$repository_path"
 elif [ -n "$commit_ref" ]; then
-  open -n "$app_path" --args --commit "$commit_ref" "$repository_path"
+  open_codiff --commit "$commit_ref" "$repository_path"
 elif [ "$walkthrough" -eq 1 ]; then
-  open -n "$app_path" --args --walkthrough "$repository_path"
+  open_codiff --walkthrough "$repository_path"
 else
-  open -n "$app_path" --args "$repository_path"
+  open_codiff "$repository_path"
 fi

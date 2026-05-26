@@ -1389,7 +1389,8 @@
   border-radius: 0;
 }
 
-.codiff-file-header.viewed .codiff-file-path {
+.codiff-file-header.viewed .codiff-file-path,
+.codiff-file-header.viewed .codiff-file-note {
   color: var(--muted);
 }
 

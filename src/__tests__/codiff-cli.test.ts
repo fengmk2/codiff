@@ -107,6 +107,28 @@ test('parseArguments treats PR marker arguments as review sources', () => {
   });
 });
 
+test('parseArguments recognizes Codex walkthrough seed options', () => {
+  expect(
+    parseArguments([
+      '-w',
+      '--codex-session',
+      '019e5e57-e7d6-7392-9ad1-ad959319d2fb',
+      '--walkthrough-context',
+      'seed.json',
+    ]),
+  ).toEqual({
+    codexSessionId: '019e5e57-e7d6-7392-9ad1-ad959319d2fb',
+    commitRef: null,
+    help: false,
+    pullRequestNumber: null,
+    pullRequestUrl: null,
+    requestedPath: resolve(process.cwd()),
+    version: false,
+    walkthrough: true,
+    walkthroughContextPath: resolve('seed.json'),
+  });
+});
+
 test('parseArguments treats hash-prefixed PR marker values as review sources', () => {
   expect(parseArguments(['pr', '#75'])).toEqual({
     commitRef: null,
@@ -261,6 +283,152 @@ test('packaged terminal helper forwards relative repository paths as absolute pa
   }
 });
 
+test('packaged terminal helper forwards Codex walkthrough seed options', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codiff-app-helper-'));
+  const fakeBin = join(directory, 'bin');
+  const logPath = join(directory, 'open-args.txt');
+  const repositoryPath = join(directory, 'repo');
+  const openPath = join(fakeBin, 'open');
+  const contextPath = join(directory, 'seed.json');
+
+  try {
+    await mkdir(fakeBin);
+    await mkdir(repositoryPath);
+    await writeFile(contextPath, '{}');
+    await writeFile(
+      openPath,
+      '#!/bin/sh\nfor arg in "$@"; do\n  printf "%s\\n" "$arg" >> "$OPEN_ARGS_FILE"\ndone\n',
+    );
+    await chmod(openPath, 0o755);
+
+    await execFileAsync(
+      resolve('bin/codiff-app'),
+      [
+        '-w',
+        '--codex-session',
+        '019e5e57-e7d6-7392-9ad1-ad959319d2fb',
+        '--walkthrough-context',
+        contextPath,
+        repositoryPath,
+      ],
+      {
+        env: {
+          ...process.env,
+          OPEN_ARGS_FILE: logPath,
+          PATH: `${fakeBin}:${process.env.PATH}`,
+        },
+      },
+    );
+
+    expect((await readFile(logPath, 'utf8')).trim().split('\n')).toEqual([
+      '-n',
+      resolve('bin/../../../..'),
+      '--args',
+      '--codex-session',
+      '019e5e57-e7d6-7392-9ad1-ad959319d2fb',
+      '--walkthrough-context',
+      contextPath,
+      '--walkthrough',
+      repositoryPath,
+    ]);
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test('Codex skill launcher uses the session cwd as the repository target', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codiff-skill-launcher-'));
+  const home = join(directory, 'home');
+  const repositoryPath = join(directory, 'repo');
+  const sessionDirectory = join(home, '.codex', 'sessions', '2026', '05', '25');
+  const sessionId = '019e5e57-e7d6-7392-9ad1-ad959319d2fb';
+  const sessionPath = join(sessionDirectory, `rollout-${sessionId}.jsonl`);
+  const fakeCodiff = join(directory, 'codiff');
+  const logPath = join(directory, 'args.txt');
+
+  try {
+    await mkdir(repositoryPath, { recursive: true });
+    await mkdir(sessionDirectory, { recursive: true });
+    await writeFile(
+      sessionPath,
+      `${JSON.stringify({
+        payload: { cwd: repositoryPath },
+        type: 'turn_context',
+      })}\n`,
+    );
+    await writeFile(
+      fakeCodiff,
+      '#!/bin/sh\nfor arg in "$@"; do\n  printf "%s\\n" "$arg" >> "$OPEN_ARGS_FILE"\ndone\n',
+    );
+    await chmod(fakeCodiff, 0o755);
+
+    await execFileAsync(
+      process.execPath,
+      [resolve('codex/skills/codiff/scripts/open-codiff.mjs'), 'HEAD'],
+      {
+        cwd: resolve('codex/skills/codiff'),
+        env: {
+          ...process.env,
+          CODEX_HOME: join(home, '.codex'),
+          CODEX_THREAD_ID: sessionId,
+          CODIFF_COMMAND: fakeCodiff,
+          OPEN_ARGS_FILE: logPath,
+        },
+      },
+    );
+
+    expect((await readFile(logPath, 'utf8')).trim().split('\n')).toEqual([
+      '-w',
+      '--codex-session',
+      sessionId,
+      'HEAD',
+      repositoryPath,
+    ]);
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test('Codex skill launcher does not override explicit repository targets', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codiff-skill-launcher-'));
+  const sessionRepositoryPath = join(directory, 'session-repo');
+  const explicitRepositoryPath = join(directory, 'explicit-repo');
+  const fakeCodiff = join(directory, 'codiff');
+  const logPath = join(directory, 'args.txt');
+
+  try {
+    await mkdir(sessionRepositoryPath, { recursive: true });
+    await mkdir(explicitRepositoryPath, { recursive: true });
+    await writeFile(
+      fakeCodiff,
+      '#!/bin/sh\nfor arg in "$@"; do\n  printf "%s\\n" "$arg" >> "$OPEN_ARGS_FILE"\ndone\n',
+    );
+    await chmod(fakeCodiff, 0o755);
+
+    await execFileAsync(
+      process.execPath,
+      [resolve('codex/skills/codiff/scripts/open-codiff.mjs'), explicitRepositoryPath],
+      {
+        cwd: resolve('codex/skills/codiff'),
+        env: {
+          ...process.env,
+          CODEX_SESSION_CWD: sessionRepositoryPath,
+          CODEX_THREAD_ID: '',
+          CODIFF_COMMAND: fakeCodiff,
+          OPEN_ARGS_FILE: logPath,
+        },
+      },
+    );
+
+    expect((await readFile(logPath, 'utf8')).trim().split('\n')).toEqual([
+      '-w',
+      explicitRepositoryPath,
+    ]);
+  } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
 test('parseArguments recognizes --help and -h flags', () => {
   expect(parseArguments(['--help']).help).toBe(true);
   expect(parseArguments(['-h']).help).toBe(true);
@@ -284,7 +452,9 @@ test('formatHelpText includes version and all flags', () => {
   expect(text).toContain('--help');
   expect(text).toContain('--version');
   expect(text).toContain('--commit');
+  expect(text).toContain('--codex-session');
   expect(text).toContain('--walkthrough');
+  expect(text).toContain('--walkthrough-context');
   expect(text).toContain('-h');
   expect(text).toContain('-v');
   expect(text).toContain('-w');

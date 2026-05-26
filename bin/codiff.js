@@ -23,7 +23,14 @@ const run = () => {
     return;
   }
 
-  const { commitRef, pullRequestNumber, requestedPath, walkthrough } = parsedArguments;
+  const {
+    codexSessionId,
+    commitRef,
+    pullRequestNumber,
+    requestedPath,
+    walkthrough,
+    walkthroughContextPath,
+  } = parsedArguments;
   let { pullRequestUrl } = parsedArguments;
 
   if (!pullRequestUrl && pullRequestNumber != null) {
@@ -45,9 +52,11 @@ const run = () => {
     env: {
       ...process.env,
       CODIFF_COMMIT_REF: commitRef ?? '',
+      CODIFF_CODEX_SESSION_ID: codexSessionId ?? '',
       CODIFF_PULL_REQUEST_URL: pullRequestUrl ?? '',
       CODIFF_REPOSITORY_PATH: requestedPath,
       CODIFF_WALKTHROUGH: walkthrough ? '1' : '',
+      CODIFF_WALKTHROUGH_CONTEXT: walkthroughContextPath ?? '',
     },
     stdio: 'ignore',
   });

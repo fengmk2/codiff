@@ -5,6 +5,12 @@ import { parseArgs } from 'node:util';
 
 export const flagDefinitions = [
   { argument: '<ref>', description: 'Review a specific commit.', name: 'commit', type: 'string' },
+  {
+    argument: '<id>',
+    description: 'Attach Codex session metadata to a walkthrough.',
+    name: 'codex-session',
+    type: 'string',
+  },
   { description: 'Show this help message and exit.', name: 'help', short: 'h', type: 'boolean' },
   {
     description: 'Show version number and exit.',
@@ -17,6 +23,12 @@ export const flagDefinitions = [
     name: 'walkthrough',
     short: 'w',
     type: 'boolean',
+  },
+  {
+    argument: '<file>',
+    description: 'Seed a walkthrough with Codex conversation context JSON.',
+    name: 'walkthrough-context',
+    type: 'string',
   },
 ];
 
@@ -199,9 +211,13 @@ export const parseArguments = (args) => {
   });
 
   let commitRef = typeof values.commit === 'string' ? values.commit : null;
+  const codexSessionId =
+    typeof values['codex-session'] === 'string' ? values['codex-session'] : null;
   let pullRequestNumber = null;
   let pullRequestUrl = null;
   let requestedPath = null;
+  const walkthroughContextPath =
+    typeof values['walkthrough-context'] === 'string' ? values['walkthrough-context'] : null;
 
   for (let index = 0; index < positionals.length; index += 1) {
     const arg = positionals[index];
@@ -235,6 +251,7 @@ export const parseArguments = (args) => {
   }
 
   return {
+    ...(codexSessionId ? { codexSessionId } : {}),
     commitRef,
     help: values.help === true,
     pullRequestNumber,
@@ -242,5 +259,6 @@ export const parseArguments = (args) => {
     requestedPath: resolve(requestedPath ?? process.cwd()),
     version: values.version === true,
     walkthrough: values.walkthrough === true,
+    ...(walkthroughContextPath ? { walkthroughContextPath: resolve(walkthroughContextPath) } : {}),
   };
 };

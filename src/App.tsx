@@ -23,6 +23,7 @@ import { defaultConfig } from './config/defaults.ts';
 import { getShortcutLabel, matchesShortcut } from './config/keymap.ts';
 import type { CodiffConfig } from './config/types.ts';
 import {
+  defaultCodexSkillStatus,
   defaultLaunchOptions,
   defaultPreferences,
   defaultTerminalHelperStatus,
@@ -72,6 +73,7 @@ import {
 } from './lib/walkthrough.ts';
 import type {
   ChangedFile,
+  CodexSkillStatus,
   CodiffLaunchOptions,
   CodiffPreferences,
   GitIdentity,
@@ -123,6 +125,9 @@ export default function App() {
   const [localChangesDetected, setLocalChangesDetected] = useState(false);
   const [launchOptions, setLaunchOptions] = useState<CodiffLaunchOptions>(defaultLaunchOptions);
   const [codiffConfig, setCodiffConfig] = useState<CodiffConfig>(defaultConfig);
+  const [codexSkillInstalling, setCodexSkillInstalling] = useState(false);
+  const [codexSkillStatus, setCodexSkillStatus] =
+    useState<CodexSkillStatus>(defaultCodexSkillStatus);
   const [preferences, setPreferences] = useState<CodiffPreferences>(defaultPreferences);
   const [reviewComments, setReviewComments] = useState<ReadonlyArray<ReviewComment>>([]);
   const [pullRequestReviewSubmitting, setPullRequestReviewSubmitting] =
@@ -197,6 +202,14 @@ export default function App() {
       }
       setLaunchOptions(nextLaunchOptions);
 
+      const nextCodexSkillStatus = await window.codiff
+        .getCodexSkillStatus()
+        .catch(() => defaultCodexSkillStatus);
+      if (canceled) {
+        return;
+      }
+      setCodexSkillStatus(nextCodexSkillStatus);
+
       const nextTerminalHelperStatus = await window.codiff
         .getTerminalHelperStatus()
         .catch(() => defaultTerminalHelperStatus);
@@ -250,9 +263,6 @@ export default function App() {
 
       if (walkthroughResult?.status === 'unavailable') {
         setWalkthroughError(walkthroughResult);
-        if (walkthroughResult.code !== 'CODEX_NOT_FOUND') {
-          setSidebarMode('tree');
-        }
       } else {
         setWalkthroughError(null);
       }
@@ -998,7 +1008,7 @@ export default function App() {
 
       setSidebarMode('walkthrough');
       setWalkthroughUnread(false);
-      if (walkthrough || walkthroughLoading || !state) {
+      if (walkthrough || walkthroughError || walkthroughLoading || !state) {
         return;
       }
       if (state.files.length === 0) {
@@ -1027,9 +1037,6 @@ export default function App() {
             }
           } else {
             setWalkthroughError(result);
-            if (sidebarModeRef.current === 'walkthrough' && result.code !== 'CODEX_NOT_FOUND') {
-              setSidebarMode('tree');
-            }
           }
         })
         .catch((error: unknown) => {
@@ -1041,9 +1048,6 @@ export default function App() {
             reason: error instanceof Error ? error.message : String(error),
             status: 'unavailable',
           });
-          if (sidebarModeRef.current === 'walkthrough') {
-            setSidebarMode('tree');
-          }
         })
         .finally(() => {
           if (getSourceKey(stateRef.current?.source ?? state.source) === sourceKey) {
@@ -1051,7 +1055,7 @@ export default function App() {
           }
         });
     },
-    [state, walkthrough, walkthroughLoading],
+    [state, walkthrough, walkthroughError, walkthroughLoading],
   );
 
   useEffect(() => {
@@ -1592,6 +1596,19 @@ export default function App() {
       });
   }, []);
 
+  const installCodexSkill = useCallback(() => {
+    setCodexSkillInstalling(true);
+    window.codiff
+      .installCodexSkill()
+      .then((status) => setCodexSkillStatus(status))
+      .catch(() => {
+        setCodexSkillStatus(defaultCodexSkillStatus);
+      })
+      .finally(() => {
+        setCodexSkillInstalling(false);
+      });
+  }, []);
+
   if (loadError) {
     const showFirstRun =
       loadError.kind === 'not-a-repository' &&
@@ -1603,7 +1620,10 @@ export default function App() {
         <div className="empty-panel squircle">
           {showFirstRun ? (
             <FirstRunPanel
+              codexSkillInstalled={codexSkillStatus.installed}
+              codexSkillInstalling={codexSkillInstalling}
               installing={terminalHelperInstalling}
+              onInstallCodexSkill={installCodexSkill}
               onInstallTerminalHelper={installTerminalHelper}
             />
           ) : (
@@ -1617,7 +1637,7 @@ export default function App() {
   if (!state) {
     return (
       <main className={`loading italic${launchOptions.walkthrough ? ' codex' : ' pulse'}`}>
-        {launchOptions.walkthrough ? 'Waiting on Codex…' : 'Thinking…'}
+        {launchOptions.walkthrough ? 'Generating walkthrough…' : 'Thinking…'}
       </main>
     );
   }

@@ -314,18 +314,13 @@ export function Sidebar({
           {walkthroughLoading ? (
             <div className="sidebar-walkthrough-status-shell">
               <div className="sidebar-walkthrough-status codex">
-                <strong>Waiting on Codex…</strong>
+                <strong>Generating walkthrough…</strong>
               </div>
             </div>
           ) : walkthroughError ? (
             <div className="sidebar-walkthrough-status" title={walkthroughError.reason}>
               <strong>Walkthrough unavailable</strong>
               <span>{walkthroughError.reason}</span>
-            </div>
-          ) : null}
-          {!walkthroughLoading ? (
-            <div className="file-tree-shell" ref={treeHostRef}>
-              <FileTree className="file-tree" model={model} onClick={handleTreeClick} />
             </div>
           ) : null}
         </>

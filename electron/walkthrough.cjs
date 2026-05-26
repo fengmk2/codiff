@@ -18,6 +18,7 @@ const MAX_SECTION_PATCH_CHARS = 4_000;
  * @typedef {import('../src/types.ts').ChangedFile} ChangedFile
  * @typedef {import('../src/types.ts').DiffSection} DiffSection
  * @typedef {import('../src/types.ts').RepositoryState} RepositoryState
+ * @typedef {import('../src/types.ts').WalkthroughContext} WalkthroughContext
  * @typedef {{model?: string; fallbackModel?: string; onModelFallback?: (fallbackModel: string, originalModel: string) => Promise<void> | void}} CodexOptions
  */
 
@@ -110,8 +111,20 @@ const buildPromptInput = (state) => {
   };
 };
 
-/** @param {RepositoryState} state */
-const buildPrompt = (state) => `You are helping Codiff order a code review.
+/** @param {WalkthroughContext | null | undefined} context */
+const buildWalkthroughContextInput = (context) =>
+  context
+    ? `Codex conversation context:
+${JSON.stringify(context, null, 2)}
+
+Use this context as orientation for reviewer intent, implementation rationale, validation, and known risks.
+Treat the repository change digest as the source of truth for what changed.
+If the context and digest conflict, trust the digest.
+`
+    : '';
+
+/** @param {RepositoryState} state @param {WalkthroughContext | null | undefined} [context] */
+const buildPrompt = (state, context) => `You are helping Codiff order a code review.
 
 Return a high-leverage review walkthrough order, not review findings.
 Do not inspect the repository or run shell commands; use only the digest below.
@@ -142,6 +155,7 @@ Do not nitpick syntax, naming, style, formatting, or local cleanup unless it aff
 Do not mention files that were not provided.
 Return JSON only.
 
+${buildWalkthroughContextInput(context)}
 Repository change digest:
 ${JSON.stringify(buildPromptInput(state), null, 2)}
 `;
@@ -217,8 +231,8 @@ const normalizeWalkthrough = (input, files) => {
   };
 };
 
-/** @param {RepositoryState} state @param {CodexOptions} codexOptions */
-const readWalkthrough = async (state, codexOptions) => {
+/** @param {RepositoryState} state @param {CodexOptions} codexOptions @param {WalkthroughContext | null | undefined} [context] */
+const readWalkthrough = async (state, codexOptions, context) => {
   if (state.files.length === 0) {
     return {
       status: 'ready',
@@ -236,7 +250,7 @@ const readWalkthrough = async (state, codexOptions) => {
   try {
     const response = await runCodex(
       state.root,
-      buildPrompt(state),
+      buildPrompt(state, context),
       walkthroughSchema,
       'walkthrough.json',
       'Codex walkthrough timed out.',
