@@ -55,6 +55,7 @@ import {
   getCommentKey,
   getReviewCommentRangeProps,
   getReviewCommentsFromState,
+  getVisibleReviewComments,
 } from './lib/review-comments.ts';
 import {
   SIDEBAR_COLLAPSE_THRESHOLD,
@@ -579,6 +580,7 @@ export default function App() {
           copyCommentsOnClose: nextConfig.settings.copyCommentsOnClose,
           lastRepositoryPath: nextConfig.settings.lastRepositoryPath,
           openAIModel: nextConfig.settings.openAIModel,
+          showOutdated: nextConfig.settings.showOutdated,
           showWhitespace: nextConfig.settings.showWhitespace,
           theme: nextConfig.settings.theme,
         });
@@ -591,6 +593,7 @@ export default function App() {
         copyCommentsOnClose: nextConfig.settings.copyCommentsOnClose,
         lastRepositoryPath: nextConfig.settings.lastRepositoryPath,
         openAIModel: nextConfig.settings.openAIModel,
+        showOutdated: nextConfig.settings.showOutdated,
         showWhitespace: nextConfig.settings.showWhitespace,
         theme: nextConfig.settings.theme,
       });
@@ -673,6 +676,11 @@ export default function App() {
   }, [walkthroughError]);
 
   const showWhitespace = preferences.showWhitespace;
+  const showOutdated = preferences.showOutdated;
+  const visibleReviewComments = useMemo(
+    () => getVisibleReviewComments(reviewComments, showOutdated),
+    [reviewComments, showOutdated],
+  );
   const walkthroughNotes = useMemo(() => getWalkthroughNotes(walkthrough), [walkthrough]);
   const orderedFiles = useMemo(
     () =>
@@ -1202,6 +1210,13 @@ export default function App() {
         id: 'toggle-sidebar',
         keymapAction: 'toggleSidebar',
         title: 'Toggle Sidebar',
+      }),
+      registry.register({
+        execute: () => {
+          void window.codiff.setShowOutdated(!preferencesRef.current.showOutdated).catch(() => {});
+        },
+        id: 'toggle-outdated-comments',
+        title: 'Toggle Outdated Comments',
       }),
       registry.register({
         execute: () => window.location.reload(),
@@ -1834,7 +1849,7 @@ export default function App() {
           <ReviewCodeView
             activeSearchMatch={activeDiffSearchMatch}
             collapsed={collapsed}
-            comments={reviewComments}
+            comments={visibleReviewComments}
             files={visibleFiles}
             focusCommentId={focusCommentId}
             focusCommentRequest={focusCommentRequest}

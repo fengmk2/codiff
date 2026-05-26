@@ -229,6 +229,7 @@ export type CodiffPreferences = {
   copyCommentsOnClose: boolean;
   lastRepositoryPath: string;
   openAIModel: string;
+  showOutdated: boolean;
   showWhitespace: boolean;
   theme: CodiffTheme;
 };
@@ -249,6 +250,7 @@ export type PullRequestExistingReviewComment = PullRequestReviewComment & {
     url?: string;
   };
   id: string;
+  isOutdated?: boolean;
   submittedAt?: string;
   url?: string;
 };

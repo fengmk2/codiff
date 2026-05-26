@@ -411,6 +411,16 @@ const buildApplicationMenu = () =>
             type: 'checkbox',
           },
           {
+            checked: config.settings.showOutdated,
+            click: (menuItem) => {
+              updateConfig({
+                settings: { ...config.settings, showOutdated: menuItem.checked },
+              });
+            },
+            label: 'Show Outdated Comments',
+            type: 'checkbox',
+          },
+          {
             checked: config.settings.copyCommentsOnClose,
             click: (menuItem) => {
               updateConfig({
@@ -803,6 +813,10 @@ ipcMain.handle('codiff:getGitIdentity', async (event) => {
 ipcMain.handle('codiff:getPreferences', () => configToPreferences(config));
 
 ipcMain.handle('codiff:getConfig', () => config);
+
+ipcMain.handle('codiff:setShowOutdated', (_event, value) => {
+  updateConfig({ settings: { ...config.settings, showOutdated: Boolean(value) } });
+});
 
 ipcMain.handle('codiff:openConfigFile', () => openConfigFile());
 
