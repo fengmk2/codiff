@@ -17,7 +17,6 @@ minimumReleaseAgeExclude:
 catalog:
   vite: npm:@voidzero-dev/vite-plus-core@^0.1.22
   vite-plus: 'https://pkg.pr.new/voidzero-dev/vite-plus@1588'
-  vitest: ^4.1.5
 nodeLinker: hoisted
 onlyBuiltDependencies:
   - '@swc/core'
