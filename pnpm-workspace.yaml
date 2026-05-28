@@ -1,7 +1,9 @@
 allowBuilds:
   '@swc/core': true
+  edgedriver: false
   electron: true
   electron-winstaller: true
+  geckodriver: false
 blockExoticSubdeps: false
 minimumReleaseAge: 60
 minimumReleaseAgeExclude:
