@@ -84,6 +84,7 @@ module.exports = {
     ...(iconPath ? { icon: iconPath } : {}),
     ignore: [
       /^\/\.DS_Store$/,
+      /^\/\.cache(?:$|\/)/,
       /^\/\.enum_manifest\.json$/,
       /^\/\.env(?:$|[.])/,
       /^\/\.git(?:$|\/)/,
