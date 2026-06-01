@@ -4,9 +4,20 @@ allowBuilds:
   electron-winstaller: true
 blockExoticSubdeps: false
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@^0.1.23
-  vite-plus: ^0.1.23
-  vitest: npm:@voidzero-dev/vite-plus-test@^0.1.23
+  vite: https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-core@1738
+  vite-plus: https://pkg.pr.new/voidzero-dev/vite-plus@1738
+  vitest: https://pkg.pr.new/voidzero-dev/vite-plus/@voidzero-dev/vite-plus-test@1738
+minimumReleaseAge: 60
+minimumReleaseAgeExclude:
+  - vite-plus
+  - vite
+  - vitest
+  - '@voidzero-dev/*'
+  - '@oxc-project/*'
+  - '@oxlint/*'
+  - oxlint
+  - oxfmt
+  - oxlint-tsgolint
 nodeLinker: hoisted
 onlyBuiltDependencies:
   - '@swc/core'
