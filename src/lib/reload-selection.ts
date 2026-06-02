@@ -1,0 +1,172 @@
+import type { GitFileStatus, RepositoryState, ReviewSource } from '../types.ts';
+import { getSourceKey } from './source.ts';
+
+const reloadSelectionStorageKey = 'codiff.reloadSelection.v3';
+
+type ReloadSelectionFile = {
+  fingerprint: string;
+  path: string;
+  status: GitFileStatus;
+};
+
+type ReloadSelection = {
+  files: ReadonlyArray<ReloadSelectionFile>;
+  root: string;
+  selectedPath: string;
+  source: ReviewSource;
+};
+
+const getStorage = () => {
+  try {
+    return window.sessionStorage;
+  } catch {
+    return null;
+  }
+};
+
+const isObject = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value != null;
+
+const isOptionalString = (value: unknown) => value == null || typeof value === 'string';
+
+const isReviewSource = (value: unknown): value is ReviewSource => {
+  if (!isObject(value) || typeof value.type !== 'string') {
+    return false;
+  }
+
+  if (value.type === 'working-tree') {
+    return true;
+  }
+
+  if (value.type === 'commit' || value.type === 'branch') {
+    return typeof value.ref === 'string';
+  }
+
+  return (
+    value.type === 'pull-request' &&
+    typeof value.url === 'string' &&
+    (value.number == null || typeof value.number === 'number') &&
+    isOptionalString(value.headSha) &&
+    isOptionalString(value.owner) &&
+    isOptionalString(value.repo) &&
+    isOptionalString(value.title)
+  );
+};
+
+const isGitFileStatus = (value: unknown): value is GitFileStatus =>
+  value === 'added' ||
+  value === 'deleted' ||
+  value === 'modified' ||
+  value === 'renamed' ||
+  value === 'untracked';
+
+const isReloadSelectionFile = (value: unknown): value is ReloadSelectionFile =>
+  isObject(value) &&
+  typeof value.fingerprint === 'string' &&
+  typeof value.path === 'string' &&
+  isGitFileStatus(value.status);
+
+const isReloadSelection = (value: unknown): value is ReloadSelection =>
+  isObject(value) &&
+  Array.isArray(value.files) &&
+  value.files.every(isReloadSelectionFile) &&
+  typeof value.root === 'string' &&
+  typeof value.selectedPath === 'string' &&
+  isReviewSource(value.source);
+
+const getMatchingSelection = (selection: ReloadSelection | null, state: RepositoryState) =>
+  selection?.root === state.root && getSourceKey(selection.source) === getSourceKey(state.source)
+    ? selection
+    : null;
+
+export const consumeReloadSelection = (): ReloadSelection | null => {
+  const storage = getStorage();
+  if (!storage) {
+    return null;
+  }
+
+  let raw: string | null;
+  try {
+    raw = storage.getItem(reloadSelectionStorageKey);
+    storage.removeItem(reloadSelectionStorageKey);
+  } catch {
+    return null;
+  }
+  if (!raw) {
+    return null;
+  }
+
+  try {
+    const parsed: unknown = JSON.parse(raw);
+    return isReloadSelection(parsed) ? parsed : null;
+  } catch {
+    return null;
+  }
+};
+
+export const getReloadSelectionPath = (
+  selection: ReloadSelection | null,
+  state: RepositoryState,
+): string | null => {
+  const matchedSelection = getMatchingSelection(selection, state);
+  if (!matchedSelection) {
+    return null;
+  }
+
+  return state.files.some((file) => file.path === matchedSelection.selectedPath)
+    ? matchedSelection.selectedPath
+    : null;
+};
+
+export const getReloadDeltaPaths = (
+  selection: ReloadSelection | null,
+  state: RepositoryState,
+): ReadonlySet<string> => {
+  const matchedSelection = getMatchingSelection(selection, state);
+  if (!matchedSelection) {
+    return new Set();
+  }
+
+  const previousFiles = new Map(matchedSelection.files.map((file) => [file.path, file]));
+  const deltaPaths = new Set<string>();
+  for (const file of state.files) {
+    const previousFile = previousFiles.get(file.path);
+    if (
+      !previousFile ||
+      previousFile.fingerprint !== file.fingerprint ||
+      previousFile.status !== file.status
+    ) {
+      deltaPaths.add(file.path);
+    }
+  }
+
+  return deltaPaths;
+};
+
+export const writeReloadSelection = (
+  state: RepositoryState | null,
+  selectedPath: string | null,
+) => {
+  const storage = getStorage();
+  if (!storage || !state || !selectedPath) {
+    return;
+  }
+
+  try {
+    storage.setItem(
+      reloadSelectionStorageKey,
+      JSON.stringify({
+        files: state.files.map((file) => ({
+          fingerprint: file.fingerprint,
+          path: file.path,
+          status: file.status,
+        })),
+        root: state.root,
+        selectedPath,
+        source: state.source,
+      } satisfies ReloadSelection),
+    );
+  } catch {
+    return;
+  }
+};

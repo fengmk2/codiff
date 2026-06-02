@@ -50,6 +50,12 @@ import {
 } from './lib/diff.ts';
 import { compactPath, fuzzyMatches, sortFiles } from './lib/files.ts';
 import {
+  consumeReloadSelection,
+  getReloadDeltaPaths,
+  getReloadSelectionPath,
+  writeReloadSelection,
+} from './lib/reload-selection.ts';
+import {
   buildReviewCommentsMarkdown,
   getCommentKey,
   getReviewCommentRangeProps,
@@ -133,6 +139,7 @@ export default function App() {
     useState<CodexSkillStatus>(defaultCodexSkillStatus);
   const [preferences, setPreferences] = useState<CodiffPreferences>(defaultPreferences);
   const [reviewComments, setReviewComments] = useState<ReadonlyArray<ReviewComment>>([]);
+  const [reloadDeltaPaths, setReloadDeltaPaths] = useState<ReadonlySet<string>>(() => new Set());
   const [pullRequestReviewSubmitting, setPullRequestReviewSubmitting] =
     useState<PullRequestReviewEvent | null>(null);
   const [scrollTarget, setScrollTarget] = useState<{ path: string; request: number } | null>(null);
@@ -273,6 +280,22 @@ export default function App() {
     [bumpItemVersion],
   );
 
+  const scrollPathIntoReview = useCallback((path: string) => {
+    setScrollTarget((current) => ({
+      path,
+      request: (current?.request ?? 0) + 1,
+    }));
+    programmaticScrollPathRef.current = path;
+    if (programmaticScrollTimerRef.current != null) {
+      window.clearTimeout(programmaticScrollTimerRef.current);
+    }
+
+    programmaticScrollTimerRef.current = window.setTimeout(() => {
+      programmaticScrollPathRef.current = null;
+      programmaticScrollTimerRef.current = null;
+    }, 1200);
+  }, []);
+
   const saveCurrentSourceSession = useCallback(() => {
     const currentState = stateRef.current;
     if (!currentState) {
@@ -293,6 +316,7 @@ export default function App() {
     let canceled = false;
 
     const load = async () => {
+      const reloadSelection = consumeReloadSelection();
       const nextLaunchOptions = await window.codiff.getLaunchOptions();
       if (canceled) {
         return;
@@ -315,7 +339,7 @@ export default function App() {
       }
       setTerminalHelperStatus(nextTerminalHelperStatus);
 
-      const nextState = await window.codiff.getRepositoryState();
+      const nextState = await window.codiff.getRepositoryState(reloadSelection?.source);
 
       if (canceled) {
         return;
@@ -375,6 +399,8 @@ export default function App() {
       const initialFiles = nextLaunchOptions.walkthrough
         ? orderFilesByWalkthrough(orderedState.files, nextWalkthrough)
         : orderedState.files;
+      const reloadSelectedPath = getReloadSelectionPath(reloadSelection, orderedState);
+      const nextReloadDeltaPaths = getReloadDeltaPaths(reloadSelection, orderedState);
 
       setHistoryEntries(history.entries);
       setHistoryHasMore(history.entries.length >= HISTORY_PAGE_SIZE);
@@ -396,9 +422,14 @@ export default function App() {
       setItemVersionByPath({});
       setFocusCommentId(null);
       setFocusCommentRequest(0);
+      setReloadDeltaPaths(nextReloadDeltaPaths);
       setReviewComments(getReviewCommentsFromState(orderedState));
       setViewed(nextViewed);
-      setSelectedPath((current) => current ?? initialFiles[0]?.path ?? null);
+      const nextSelectedPath = reloadSelectedPath ?? initialFiles[0]?.path ?? null;
+      setSelectedPath(nextSelectedPath);
+      if (reloadSelectedPath) {
+        scrollPathIntoReview(reloadSelectedPath);
+      }
     };
 
     load().catch((error: unknown) => {
@@ -413,7 +444,7 @@ export default function App() {
     return () => {
       canceled = true;
     };
-  }, []);
+  }, [scrollPathIntoReview]);
 
   useEffect(
     () =>
@@ -861,21 +892,25 @@ export default function App() {
     setSelectedPath(path);
   }, []);
 
-  const activatePath = useCallback((path: string) => {
-    setSelectedPath(path);
-    setScrollTarget((current) => ({
-      path,
-      request: (current?.request ?? 0) + 1,
-    }));
-    programmaticScrollPathRef.current = path;
-    if (programmaticScrollTimerRef.current != null) {
-      window.clearTimeout(programmaticScrollTimerRef.current);
-    }
+  const activatePath = useCallback(
+    (path: string) => {
+      setSelectedPath(path);
+      scrollPathIntoReview(path);
+    },
+    [scrollPathIntoReview],
+  );
 
-    programmaticScrollTimerRef.current = window.setTimeout(() => {
-      programmaticScrollPathRef.current = null;
-      programmaticScrollTimerRef.current = null;
-    }, 1200);
+  const reloadWindow = useCallback(() => {
+    window.location.reload();
+  }, []);
+
+  useEffect(() => {
+    const writeCurrentReloadSelection = () => {
+      writeReloadSelection(stateRef.current, selectedPathRef.current);
+    };
+
+    window.addEventListener('beforeunload', writeCurrentReloadSelection);
+    return () => window.removeEventListener('beforeunload', writeCurrentReloadSelection);
   }, []);
 
   const selectSource = useCallback(
@@ -894,6 +929,7 @@ export default function App() {
       setLoadError(null);
       setFocusCommentId(null);
       setFocusCommentRequest(0);
+      setReloadDeltaPaths(new Set());
       setDiffSearchQuery('');
       setActiveDiffSearchMatchIndex(0);
       setScrollTarget(null);
@@ -936,6 +972,7 @@ export default function App() {
           setCollapsed(new Set(nextCollapsed));
           setItemVersionByPath({});
           setReviewComments(session?.reviewComments ?? getReviewCommentsFromState(orderedState));
+          setReloadDeltaPaths(new Set());
           setViewed(nextViewed);
           setSelectedPath(nextSelectedPath);
           setWalkthrough(session?.walkthrough ?? null);
@@ -1248,7 +1285,7 @@ export default function App() {
         title: 'Toggle Word Wrap',
       }),
       registry.register({
-        execute: () => window.location.reload(),
+        execute: reloadWindow,
         id: 'reload',
         title: 'Reload Window',
       }),
@@ -1260,7 +1297,14 @@ export default function App() {
         unregister();
       }
     };
-  }, [bumpItemVersion, changeSidebarMode, expandSidebar, openDiffSearch, toggleSidebar]);
+  }, [
+    bumpItemVersion,
+    changeSidebarMode,
+    expandSidebar,
+    openDiffSearch,
+    reloadWindow,
+    toggleSidebar,
+  ]);
 
   const toggleCollapsed = useCallback(
     (file: ChangedFile, isCollapsed: boolean) => {
@@ -1744,6 +1788,7 @@ export default function App() {
         </div>
       ) : null}
       <RepositoryChangeBanner
+        onReload={reloadWindow}
         visible={localChangesDetected && (pendingSource ?? state.source).type === 'working-tree'}
       />
       <DiffSearchPanel
@@ -1828,6 +1873,7 @@ export default function App() {
           onSelectPath={selectPath}
           onSelectSource={selectSource}
           pullRequestSource={historySource?.type === 'pull-request' ? historySource : null}
+          reloadDeltaPaths={reloadDeltaPaths}
           searchQuery={sidebarMode === 'history' ? historySearchQuery : fileSearchQuery}
           selectedPath={visibleSelectedPath}
           showWhitespace={showWhitespace}
