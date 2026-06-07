@@ -172,12 +172,14 @@ test('prompts generated walkthroughs to stay grouped instead of file-per-stop', 
     source: { type: 'working-tree' },
   });
 
-  expect(prompt).toContain('Changed files: 28.');
+  expect(prompt).toContain('digest has 28 files');
   expect(prompt).toContain('Target 7-12 main-path stops');
+  expect(prompt).toContain('Coverage contract');
+  expect(prompt).toContain('Create exactly one segment for every file');
   expect(prompt).toContain('Phase titles render in a compact top bar');
   expect(prompt).toContain('Do not create one stop per file');
-  expect(prompt).toContain('relatedSegmentIds to include up to 8 files');
-  expect(prompt).toContain('Put secondary, mechanical, generated, docs-only');
+  expect(prompt).toContain('use relatedSegmentIds for up to 8 files');
+  expect(prompt).toContain('Sequence + relatedSegmentIds + rest');
   expect(prompt).toContain('include commit.title and commit.body by default');
 });
 
@@ -209,6 +211,17 @@ test('drops stops and rest items that reference unknown segments', () => {
 
   expect(result.orders[0].sequence.map((stop: any) => stop.segmentId)).toEqual(['s1', 's6']);
   expect(result.orders[0].rest.map((item: any) => item.segmentId)).toEqual(['lock']);
+});
+
+test('adds unreferenced segments to rest so changed files remain visible', () => {
+  const input = baseInput();
+  input.orders[0].rest = [];
+
+  const result = normalizeNarrativeWalkthrough(input, files);
+
+  expect(result.orders[0].sequence.map((stop: any) => stop.segmentId)).toEqual(['s1', 's6']);
+  expect(result.orders[0].rest.map((item: any) => item.segmentId)).toEqual(['lock']);
+  expect(result.orders[0].rest[0].reason).toBe('Other changes');
 });
 
 test('normalizes related segments under the same stop and keeps them out of rest', () => {

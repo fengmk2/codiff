@@ -7,7 +7,7 @@ import {
   type WalkthroughOrderView,
   type WalkthroughStopView,
 } from '../../../lib/narrative-walkthrough.ts';
-import type { NarrativeWalkthrough } from '../../../types.ts';
+import type { ChangedFile, NarrativeWalkthrough } from '../../../types.ts';
 import { Check, GitBranch, Path } from './icons.tsx';
 import { PhaseIcon } from './parts.tsx';
 import type { NarrativeNavigation } from './useNarrativeNavigation.ts';
@@ -135,9 +135,11 @@ function SupportingFilesStop({
 }
 
 export function NarrativeSidebar({
+  files,
   navigation,
   walkthrough,
 }: {
+  files: ReadonlyArray<ChangedFile>;
   navigation: NarrativeNavigation;
   walkthrough: NarrativeWalkthrough;
 }) {
@@ -150,7 +152,7 @@ export function NarrativeSidebar({
     navigation.mode === 'stop' ? orderView.sequence[navigation.index]?.segmentId : null;
 
   const committable = isWalkthroughCommittable(walkthrough);
-  const commitModel = committable ? buildCommitModel(orderView) : null;
+  const commitModel = committable ? buildCommitModel(orderView, files) : null;
   const commitTotals = commitModel
     ? commitModel.files
         .filter((file) => navigation.commitSelected.has(file.path))

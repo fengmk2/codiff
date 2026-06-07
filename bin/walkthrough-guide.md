@@ -44,6 +44,9 @@ _results-first_ without duplicating data.
     `changeType` tags the file in the commit composer (`fix` | `feature` | `refactor` | `test` |
     `generated` | `lockfile` | `snapshot` | `i18n` | `docs`); `commitNote` is the one-line note the
     generated commit body uses for the file (falls back to `summary`).
+  - For broad walkthroughs, prefer **exactly one segment per changed file** in digest order, using
+    ids like `s1`, `s2`, ... . Split a file into multiple segments only when it truly contains
+    separate review ideas.
 
 - **`orders[]`** — one or more reading views over the segments. Each has:
   - `id` (e.g. `"keys"`, `"results"`), `label`, `tagline`.
@@ -93,6 +96,8 @@ prose, title?, relatedSegmentIds? }`. Use **6-12 stops for large changes**, fewe
   instead of promoting each one to the main path.
 - When several files implement the same idea, make one stop for the lead segment and attach the
   siblings with `relatedSegmentIds` instead of creating adjacent single-file stops.
+- Treat `sequence[]`, `relatedSegmentIds`, and `rest[]` as a partition of the changed files: after
+  the main path and supporting groups are read, every segment should be referenced exactly once.
 - Write `prose` as the agent's voice explaining _why this matters now_. It may use inline
   markdown / code. Keep review comments separate (`comments[]`), not baked into prose.
 - Use `importance: "critical"` sparingly — only the genuine root cause or the defining test.

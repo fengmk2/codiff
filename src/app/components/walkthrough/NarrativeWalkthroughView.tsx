@@ -1,5 +1,15 @@
-import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
+  Activity,
+  Fragment,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
+import {
+  buildCommitModel,
   getStopSegments,
   isWalkthroughCommittable,
   resolveSegmentFile,
@@ -17,6 +27,16 @@ const fileName = (path: string) => path.split('/').pop() ?? path;
 
 const countUniqueRestFiles = (orderView: WalkthroughOrderView) =>
   new Set(orderView.rest.map((item) => item.segment.path)).size;
+
+const stopEstimateHeight = (stop: WalkthroughStopView) => {
+  const segments = getStopSegments(stop);
+  const files = new Set(segments.map((segment) => segment.path)).size;
+  const changedLines = segments.reduce(
+    (total, segment) => total + segment.added + segment.deleted,
+    0,
+  );
+  return Math.max(520, Math.min(1600, 260 + files * 120 + changedLines * 14));
+};
 
 /** Renders the live diff for one changed file via the real ReviewCodeView. */
 export type RenderStopDiff = (file: ChangedFile, note?: string) => ReactNode;
@@ -74,6 +94,65 @@ function StopBlock({
   );
 }
 
+function MeasuredStop({
+  children,
+  index,
+  onHeight,
+  onRef,
+}: {
+  children: ReactNode;
+  index: number;
+  onHeight: (index: number, height: number) => void;
+  onRef: (index: number, el: HTMLElement | null) => void;
+}) {
+  const [node, setNode] = useState<HTMLDivElement | null>(null);
+  const setRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      onRef(index, el);
+      setNode(el);
+    },
+    [index, onRef],
+  );
+
+  useLayoutEffect(() => {
+    if (!node) {
+      return;
+    }
+    const measure = () => onHeight(index, node.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [index, node, onHeight]);
+
+  return <div ref={setRef}>{children}</div>;
+}
+
+function StopPlaceholder({
+  children,
+  height,
+  index,
+  onRef,
+}: {
+  children?: ReactNode;
+  height: number;
+  index: number;
+  onRef: (index: number, el: HTMLElement | null) => void;
+}) {
+  const setRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      onRef(index, el);
+    },
+    [index, onRef],
+  );
+
+  return (
+    <div aria-hidden className="wt-stop-placeholder" ref={setRef} style={{ height }}>
+      {children}
+    </div>
+  );
+}
+
 /**
  * The whole order as one continuous scroll: every stop's narration and diff
  * stacked top-to-bottom, so the reader moves through the change hunk by hunk by
@@ -96,7 +175,37 @@ function SequenceScroll({
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const blockRefs = useRef<Array<HTMLElement | null>>([]);
+  const commandScrollIgnoreUntilRef = useRef(0);
   const { scrollTarget, syncIndexFromScroll } = navigation;
+  const [heightBySegment, setHeightBySegment] = useState<Readonly<Record<string, number>>>({});
+
+  const getStopHeight = useCallback(
+    (stop: WalkthroughStopView) => heightBySegment[stop.segmentId] ?? stopEstimateHeight(stop),
+    [heightBySegment],
+  );
+
+  const setBlockRef = useCallback((index: number, el: HTMLElement | null) => {
+    blockRefs.current[index] = el;
+  }, []);
+
+  const updateStopHeight = useCallback(
+    (index: number, height: number) => {
+      const stop = orderView.sequence[index];
+      if (!stop || height <= 0) {
+        return;
+      }
+      setHeightBySegment((current) =>
+        current[stop.segmentId] != null && Math.abs(current[stop.segmentId] - height) < 1
+          ? current
+          : { ...current, [stop.segmentId]: height },
+      );
+    },
+    [orderView],
+  );
+
+  useEffect(() => {
+    blockRefs.current = blockRefs.current.slice(0, orderView.sequence.length);
+  }, [orderView]);
 
   // Derive the focused stop from scroll: it's the last block whose top has
   // crossed an activation line a little below the top of the viewport.
@@ -124,6 +233,9 @@ function SequenceScroll({
       syncIndexFromScroll(current);
     };
     const onScroll = () => {
+      if (performance.now() < commandScrollIgnoreUntilRef.current) {
+        return;
+      }
       if (!frame) {
         frame = requestAnimationFrame(measure);
       }
@@ -147,30 +259,64 @@ function SequenceScroll({
     if (!container || !el) {
       return;
     }
+    commandScrollIgnoreUntilRef.current = performance.now() + 80;
     container.scrollTo({
       behavior: 'instant',
       top: el.offsetTop,
     });
   }, [scrollTarget]);
 
+  const currentIndex = navigation.mode === 'stop' ? navigation.index : scrollTarget.index;
+  const visibleStart = Math.max(0, currentIndex - 1);
+  const visibleEnd = Math.min(orderView.sequence.length - 1, currentIndex + 1);
+
   return (
     <div className="wt-stop wt-sequence" ref={scrollRef}>
-      {orderView.sequence.map((stop, i) => (
-        <div
-          key={stop.segmentId}
-          ref={(el) => {
-            blockRefs.current[i] = el;
-          }}
-        >
-          <StopBlock
-            files={files}
-            isCurrent={i === navigation.index}
-            renderStopDiff={renderStopDiff}
-            showWhitespace={showWhitespace}
-            stop={stop}
-          />
-        </div>
-      ))}
+      {orderView.sequence.map((stop, i) => {
+        const isVisible = i >= visibleStart && i <= visibleEnd;
+        if (isVisible) {
+          return (
+            <MeasuredStop
+              index={i}
+              key={stop.segmentId}
+              onHeight={updateStopHeight}
+              onRef={setBlockRef}
+            >
+              <Activity mode="visible" name={`walkthrough-stop-${i + 1}`}>
+                <StopBlock
+                  files={files}
+                  isCurrent={i === navigation.index}
+                  renderStopDiff={renderStopDiff}
+                  showWhitespace={showWhitespace}
+                  stop={stop}
+                />
+              </Activity>
+            </MeasuredStop>
+          );
+        }
+
+        const isWarm = Math.abs(i - currentIndex) <= 2;
+        return (
+          <StopPlaceholder
+            height={getStopHeight(stop)}
+            index={i}
+            key={stop.segmentId}
+            onRef={setBlockRef}
+          >
+            {isWarm ? (
+              <Activity mode="hidden" name={`walkthrough-stop-${i + 1}`}>
+                <StopBlock
+                  files={files}
+                  isCurrent={false}
+                  renderStopDiff={renderStopDiff}
+                  showWhitespace={showWhitespace}
+                  stop={stop}
+                />
+              </Activity>
+            ) : null}
+          </StopPlaceholder>
+        );
+      })}
     </div>
   );
 }
@@ -522,7 +668,8 @@ export function NarrativeWalkthroughView({
       {navigation.mode === 'commit' ? (
         <CommitView
           branch={walkthrough.repo.branch}
-          navigation={navigation}
+          draft={navigation}
+          model={buildCommitModel(orderView, files)}
           onCommit={onCommit}
           onUpdateMessage={onUpdateCommitMessage}
         />

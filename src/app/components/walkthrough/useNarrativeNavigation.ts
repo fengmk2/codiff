@@ -1,18 +1,25 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { buildOrderView, resolveOrder } from '../../../lib/narrative-walkthrough.ts';
-import type { NarrativeWalkthrough } from '../../../types.ts';
+import type { ChangedFile, NarrativeWalkthrough } from '../../../types.ts';
 
 export type NarrativeViewMode = 'stop' | 'rest' | 'commit';
 
 export type NarrativeNavigation = ReturnType<typeof useNarrativeNavigation>;
 
-/** Every unique changed-file path the walkthrough touches, in segment order. */
-const collectCommitPaths = (walkthrough: NarrativeWalkthrough | null): ReadonlyArray<string> => {
-  if (!walkthrough) {
-    return [];
-  }
+/** Every unique path in the live tree, with walkthrough-only paths as a fallback. */
+const collectCommitPaths = (
+  walkthrough: NarrativeWalkthrough | null,
+  files: ReadonlyArray<ChangedFile>,
+): ReadonlyArray<string> => {
   const seen = new Set<string>();
   const paths: Array<string> = [];
+  for (const file of files) {
+    seen.add(file.path);
+    paths.push(file.path);
+  }
+  if (!walkthrough) {
+    return paths;
+  }
   for (const segment of walkthrough.segments) {
     if (!seen.has(segment.path)) {
       seen.add(segment.path);
@@ -31,7 +38,9 @@ const collectCommitPaths = (walkthrough: NarrativeWalkthrough | null): ReadonlyA
  */
 export const useNarrativeNavigation = (
   walkthrough: NarrativeWalkthrough | null,
+  files: ReadonlyArray<ChangedFile>,
   preferredOrderId = 'keys',
+  resetKey = '',
 ) => {
   const [orderId, setOrderId] = useState<string>(() =>
     walkthrough
@@ -59,12 +68,26 @@ export const useNarrativeNavigation = (
   // Commit composer state, only meaningful for working-tree walkthroughs. All
   // changed files start selected; the title/body may seed from the document.
   const [commitSelected, setCommitSelected] = useState<ReadonlySet<string>>(
-    () => new Set(collectCommitPaths(walkthrough)),
+    () => new Set(collectCommitPaths(walkthrough, files)),
   );
-  const [commitSubject, setCommitSubject] = useState<string>(
+  const [commitSubject, setCommitSubjectState] = useState<string>(
     () => walkthrough?.commit?.title ?? '',
   );
-  const [commitBody, setCommitBody] = useState<string>(() => walkthrough?.commit?.body ?? '');
+  const [commitBody, setCommitBodyState] = useState<string>(() => walkthrough?.commit?.body ?? '');
+  const commitBodyDirtyRef = useRef(false);
+  const commitPathSetRef = useRef(new Set(collectCommitPaths(walkthrough, files)));
+  const commitResetKeyRef = useRef(resetKey);
+  const commitSubjectDirtyRef = useRef(false);
+
+  const setCommitSubject = useCallback((value: string) => {
+    commitSubjectDirtyRef.current = true;
+    setCommitSubjectState(value);
+  }, []);
+
+  const setCommitBody = useCallback((value: string) => {
+    commitBodyDirtyRef.current = true;
+    setCommitBodyState(value);
+  }, []);
 
   // The useState initializers above run once, on the first render — which happens
   // before the walkthrough has loaded (App passes `null`, then sets it). Re-seed the
@@ -85,10 +108,53 @@ export const useNarrativeNavigation = (
     setRestVisited(false);
     const firstSegment = order?.sequence[0]?.segmentId;
     setVisited(new Set(firstSegment ? [firstSegment] : []));
-    setCommitSelected(new Set(collectCommitPaths(walkthrough)));
-    setCommitSubject(walkthrough.commit?.title ?? '');
-    setCommitBody(walkthrough.commit?.body ?? '');
-  }, [preferredOrderId, walkthrough]);
+  }, [files, preferredOrderId, walkthrough]);
+
+  useEffect(() => {
+    const paths = collectCommitPaths(walkthrough, files);
+    const pathSet = new Set(paths);
+
+    if (commitResetKeyRef.current !== resetKey) {
+      commitResetKeyRef.current = resetKey;
+      commitPathSetRef.current = pathSet;
+      commitSubjectDirtyRef.current = false;
+      commitBodyDirtyRef.current = false;
+      setCommitSelected(pathSet);
+      setCommitSubjectState(walkthrough?.commit?.title ?? '');
+      setCommitBodyState(walkthrough?.commit?.body ?? '');
+      return;
+    }
+
+    const previousPathSet = commitPathSetRef.current;
+    commitPathSetRef.current = pathSet;
+    setCommitSelected((current) => {
+      const next = new Set<string>();
+      let changed = false;
+      for (const path of current) {
+        if (pathSet.has(path)) {
+          next.add(path);
+        } else {
+          changed = true;
+        }
+      }
+      for (const path of paths) {
+        if (!previousPathSet.has(path)) {
+          next.add(path);
+          changed = true;
+        }
+      }
+      return changed ? next : current;
+    });
+
+    if (walkthrough?.commit) {
+      if (!commitSubjectDirtyRef.current) {
+        setCommitSubjectState(walkthrough.commit.title ?? '');
+      }
+      if (!commitBodyDirtyRef.current) {
+        setCommitBodyState(walkthrough.commit.body ?? '');
+      }
+    }
+  }, [files, resetKey, walkthrough]);
 
   const orderView = useMemo(
     () => (walkthrough ? buildOrderView(walkthrough, orderId) : null),

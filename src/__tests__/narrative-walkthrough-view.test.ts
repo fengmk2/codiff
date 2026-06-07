@@ -1,6 +1,7 @@
 import { expect, test } from 'vite-plus/test';
 import {
   buildCommitModel,
+  buildGenericCommitModel,
   buildOrderView,
   isWalkthroughCommittable,
   resolveOrder,
@@ -108,6 +109,39 @@ test('buildOrderView indexes stops, fills phases, and resolves segments', () => 
     ['s2'],
   ]);
   expect(view.totals).toEqual({ added: 15, deleted: 1 });
+});
+
+test('buildOrderView orders phases by their first stop in the sequence', () => {
+  const base = walkthrough();
+  const wt: NarrativeWalkthrough = {
+    ...base,
+    orders: [
+      {
+        ...base.orders[0],
+        phases: [
+          { blurb: 'The bug.', icon: 'bug', id: 'bug', n: 1, title: 'Bug' },
+          { blurb: 'Routing.', icon: 'path', id: 'routing', n: 4, title: 'Routing' },
+          { blurb: 'The proof.', icon: 'flask', id: 'proof', n: 2, title: 'Proof' },
+        ],
+        sequence: [
+          { importance: 'critical', phaseId: 'bug', prose: 'Bug.', segmentId: 's1' },
+          { importance: 'normal', phaseId: 'proof', prose: 'Proof.', segmentId: 's2' },
+          { importance: 'normal', phaseId: 'proof', prose: 'More proof.', segmentId: 'mirror' },
+          { importance: 'normal', phaseId: 'routing', prose: 'Routing.', segmentId: 'lock' },
+        ],
+      },
+      base.orders[1],
+    ],
+  };
+
+  const view = buildOrderView(wt, 'keys')!;
+
+  expect(view.phases.map((phase) => phase.id)).toEqual(['bug', 'proof', 'routing']);
+  expect(view.phases.map((phase) => phase.stops.map((stop) => stop.index + 1))).toEqual([
+    [1],
+    [2, 3],
+    [4],
+  ]);
 });
 
 test('buildOrderView keeps related files under the same narrative stop', () => {
@@ -233,6 +267,88 @@ test('buildCommitModel carries per-file change-type tags and notes onto the rows
     note: 'lock the regression',
   });
   expect(byPath.get('pnpm-lock.yaml')?.changeType).toBe('lockfile');
+});
+
+test('buildCommitModel appends live tree files missing from walkthrough segments', () => {
+  const wt = walkthrough();
+  const files: ReadonlyArray<ChangedFile> = [
+    {
+      fingerprint: 'a',
+      path: 'src/App.tsx',
+      sections: [
+        {
+          binary: false,
+          id: 'src/App.tsx:staged',
+          kind: 'staged',
+          patch: '@@ -1 +1 @@\n-a\n+b\n',
+        },
+      ],
+      status: 'modified',
+    },
+    {
+      fingerprint: 'missing',
+      path: 'src/missed.ts',
+      sections: [
+        {
+          binary: false,
+          id: 'src/missed.ts:staged',
+          kind: 'staged',
+          patch: '@@ -1,0 +1,2 @@\n+one\n+two\n',
+        },
+      ],
+      status: 'added',
+    },
+  ];
+
+  const model = buildCommitModel(buildOrderView(wt, 'keys')!, files);
+  const missing = model.files.find((file) => file.path === 'src/missed.ts');
+
+  expect(missing).toMatchObject({
+    added: 2,
+    deleted: 0,
+    note: 'Not included in the generated walkthrough.',
+  });
+  expect(model.groups.at(-1)).toMatchObject({
+    id: '__missing',
+    title: 'Other changes',
+  });
+});
+
+test('buildGenericCommitModel creates a commit group from live tree files', () => {
+  const model = buildGenericCommitModel([
+    {
+      fingerprint: 'plain',
+      path: 'src/plain.ts',
+      sections: [
+        {
+          binary: false,
+          id: 'src/plain.ts:unstaged',
+          kind: 'unstaged',
+          patch: [
+            'diff --git a/src/plain.ts b/src/plain.ts',
+            '--- a/src/plain.ts',
+            '+++ b/src/plain.ts',
+            '@@ -1 +1,2 @@',
+            '-old',
+            '+new',
+            '+more',
+          ].join('\n'),
+        },
+      ],
+      status: 'modified',
+    },
+  ]);
+
+  expect(model.groups).toHaveLength(1);
+  expect(model.groups[0]).toMatchObject({
+    id: '__changed',
+    title: 'Changed files',
+  });
+  expect(model.files[0]).toMatchObject({
+    added: 2,
+    deleted: 1,
+    path: 'src/plain.ts',
+  });
 });
 
 test('working-tree walkthroughs are committable even without commit seed text', () => {

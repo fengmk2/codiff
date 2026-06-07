@@ -26,6 +26,7 @@ import type { NarrativeNavigation } from './walkthrough/useNarrativeNavigation.t
 
 export function Sidebar({
   branchSource,
+  commitFiles,
   currentSource,
   files,
   historyEntries,
@@ -38,6 +39,7 @@ export function Sidebar({
   onActivatePath,
   onLoadMoreHistory,
   onModeChange,
+  onOpenCommit,
   onSearchQueryChange,
   onSelectPath,
   onSelectSource,
@@ -51,6 +53,7 @@ export function Sidebar({
   walkthroughUnread,
 }: {
   branchSource: Extract<ReviewSource, { type: 'branch' }> | null;
+  commitFiles: ReadonlyArray<ChangedFile>;
   currentSource: ReviewSource;
   files: ReadonlyArray<ChangedFile>;
   historyEntries: ReadonlyArray<HistoryEntry>;
@@ -63,6 +66,7 @@ export function Sidebar({
   onActivatePath: (path: string) => void;
   onLoadMoreHistory: () => void;
   onModeChange: (mode: SidebarMode) => void;
+  onOpenCommit: () => void;
   onSearchQueryChange: (query: string) => void;
   onSelectPath: (path: string) => void;
   onSelectSource: (source: ReviewSource) => void;
@@ -91,6 +95,9 @@ export function Sidebar({
     [lineCountsByPath],
   );
   const showTotalLineCount = mode !== 'history' && totalLineCount.countable;
+  const showCommitButton =
+    mode === 'tree' && currentSource.type === 'working-tree' && commitFiles.length > 0;
+  const showFooter = showTotalLineCount || showCommitButton;
   const lineCountsByPathRef = useRef(lineCountsByPath);
   const reloadDeltaGitStatusCSS = useMemo(
     () => getReloadDeltaGitStatusCSS(reloadDeltaPaths),
@@ -318,7 +325,11 @@ export function Sidebar({
           searchQuery={searchQuery}
         />
       ) : mode === 'walkthrough' && narrativeWalkthrough ? (
-        <NarrativeSidebar navigation={narrativeNavigation} walkthrough={narrativeWalkthrough} />
+        <NarrativeSidebar
+          files={commitFiles}
+          navigation={narrativeNavigation}
+          walkthrough={narrativeWalkthrough}
+        />
       ) : mode === 'walkthrough' ? (
         <>
           {walkthroughLoading ? (
@@ -339,14 +350,29 @@ export function Sidebar({
           <FileTree className="file-tree" model={model} onClick={handleTreeClick} />
         </div>
       )}
-      {showTotalLineCount ? (
+      {showFooter ? (
         <div className="sidebar-total-row">
-          <span>Total</span>
-          <DiffLineCountBadge
-            ariaLabelPrefix="Total change"
-            className="sidebar-total-line-count"
-            lineCount={totalLineCount}
-          />
+          <span className="sidebar-total-summary">
+            {showTotalLineCount ? (
+              <>
+                <span>Total:</span>
+                <DiffLineCountBadge
+                  ariaLabelPrefix="Total change"
+                  className="sidebar-total-line-count"
+                  lineCount={totalLineCount}
+                />
+              </>
+            ) : null}
+          </span>
+          {showCommitButton ? (
+            <button
+              className="codiff-open-button sidebar-commit-button"
+              onClick={onOpenCommit}
+              type="button"
+            >
+              Commit
+            </button>
+          ) : null}
         </div>
       ) : null}
     </>

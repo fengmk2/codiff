@@ -5,8 +5,6 @@
 // repairs agent-authored documents against the live diff so the renderer always
 // gets a walkthrough whose references resolve.
 
-const { readFileSync } = require('node:fs');
-const { dirname, join } = require('node:path');
 const {
   cleanText,
   normalizeEnum,
@@ -46,10 +44,11 @@ const CHANGE_TYPES = new Set([
   'docs',
 ]);
 
-const root = dirname(__dirname);
 const MAX_PROSE_CHARS = 4_000;
-const MAX_TOTAL_PATCH_CHARS = 160_000;
-const MAX_SECTION_PATCH_CHARS = 4_000;
+const MAX_TOTAL_PATCH_CHARS = 60_000;
+const MAX_LARGE_TOTAL_PATCH_CHARS = 35_000;
+const MAX_SECTION_PATCH_CHARS = 2_500;
+const MAX_LARGE_SECTION_PATCH_CHARS = 700;
 const MAX_WALKTHROUGH_PHASES = 6;
 const MAX_WALKTHROUGH_STOPS = 14;
 
@@ -601,6 +600,18 @@ const normalizeOrder = (order, segmentIds) => {
     rest.push(normalized);
   }
 
+  for (const segmentId of segmentIds) {
+    if (placedSegments.has(segmentId) || restSegments.has(segmentId)) {
+      continue;
+    }
+
+    restSegments.add(segmentId);
+    rest.push({
+      reason: 'Other changes',
+      segmentId,
+    });
+  }
+
   // Phases with no surviving stops are noise; keep only referenced ones.
   const usedPhaseIds = new Set(sequence.map((stop) => stop.phaseId));
   const usedPhases = phases
@@ -720,13 +731,10 @@ const normalizeNarrativeWalkthrough = (input, files) => {
 };
 
 /** @param {DiffSection} section @param {number} remainingBudget */
-const buildPatchExcerpt = (section, remainingBudget) => {
+const buildPatchExcerpt = (section, remainingBudget, sectionPatchBudget) => {
   const summary = section.summary?.reason ? `Summary: ${section.summary.reason}\n` : '';
   const patch = section.patch || '';
-  const maxLength = Math.max(
-    0,
-    Math.min(MAX_SECTION_PATCH_CHARS, remainingBudget - summary.length),
-  );
+  const maxLength = Math.max(0, Math.min(sectionPatchBudget, remainingBudget - summary.length));
 
   if (maxLength === 0) {
     return summary || '[patch omitted: budget exhausted]';
@@ -735,30 +743,78 @@ const buildPatchExcerpt = (section, remainingBudget) => {
   return `${summary}${truncate(patch, maxLength)}`;
 };
 
+/** @param {string} patch */
+const countPatchLines = (patch) => {
+  let added = 0;
+  let deleted = 0;
+  for (const line of patch.split('\n')) {
+    if (line.startsWith('+++') || line.startsWith('---')) {
+      continue;
+    }
+    if (line.startsWith('+')) {
+      added += 1;
+    } else if (line.startsWith('-')) {
+      deleted += 1;
+    }
+  }
+
+  return { added, deleted };
+};
+
+/** @param {number} fileCount */
+const getPromptPatchBudgets = (fileCount) =>
+  fileCount > 32
+    ? {
+        section: MAX_LARGE_SECTION_PATCH_CHARS,
+        total: MAX_LARGE_TOTAL_PATCH_CHARS,
+      }
+    : {
+        section: MAX_SECTION_PATCH_CHARS,
+        total: MAX_TOTAL_PATCH_CHARS,
+      };
+
 /** @param {RepositoryState} state */
 const buildPromptInput = (state) => {
-  let remainingPatchBudget = MAX_TOTAL_PATCH_CHARS;
+  const patchBudget = getPromptPatchBudgets(state.files.length);
+  let remainingPatchBudget = patchBudget.total;
 
   return {
     branch: state.branch,
-    files: state.files.map((file) => ({
-      oldPath: file.oldPath,
-      path: file.path,
-      sections: file.sections.map((section) => {
-        const patchExcerpt = buildPatchExcerpt(section, remainingPatchBudget);
+    commit: state.commitMetadata
+      ? {
+          stats: state.commitMetadata.stats,
+          subject: state.commitMetadata.subject,
+        }
+      : undefined,
+    files: state.files.map((file, index) => {
+      let added = 0;
+      let deleted = 0;
+      const sections = file.sections.map((section) => {
+        const stats = countPatchLines(section.patch || '');
+        added += stats.added;
+        deleted += stats.deleted;
+        const patchExcerpt = buildPatchExcerpt(section, remainingPatchBudget, patchBudget.section);
         remainingPatchBudget = Math.max(0, remainingPatchBudget - patchExcerpt.length);
 
         return {
           binary: section.binary,
           id: section.id,
           kind: section.kind,
-          loadState: section.loadState,
           patchExcerpt,
           summary: section.summary?.reason,
         };
-      }),
-      status: file.status,
-    })),
+      });
+
+      return {
+        added,
+        deleted,
+        index: index + 1,
+        oldPath: file.oldPath,
+        path: file.path,
+        sections,
+        status: file.status,
+      };
+    }),
     generatedAt: state.generatedAt,
     root: state.root,
     source: state.source,
@@ -781,15 +837,18 @@ If the context and digest conflict, trust the digest.
 const buildWalkthroughSizingGuidance = (state) => {
   const fileCount = state.files.length;
   const targetStops = fileCount <= 6 ? '3-6' : fileCount <= 16 ? '5-9' : '7-12';
-  return `Walkthrough sizing:
-- Changed files: ${fileCount}.
+  return `Coverage contract:
+- The digest has ${fileCount} files. Create exactly one segment for every file in digest.files, using the file's path/status and first section id/kind for the anchor.
+- Use segment ids s1, s2, ... in digest.files order. Do not skip files. Do not invent files.
+- Use file granularity for broad file-level changes. Use hunk/line only for a truly pinpointed change.
+- Do not add comments unless there is an explicit review-comment need.
+
+Grouping contract:
 - Target ${targetStops} main-path stops and at most ${MAX_WALKTHROUGH_STOPS}.
-- Use 2-${MAX_WALKTHROUGH_PHASES} story phases. A phase is a conceptual chapter, not a file.
-- Phase titles render in a compact top bar: keep each title to 1-2 short words and at most 16 characters, e.g. "UI", "CLI", "Tests", "Docs", "Runtime", "Cleanup".
-- Do not create one stop per file. A stop can use relatedSegmentIds to include up to 8 files that belong to one review idea.
-- Prefer one conceptual stop with relatedSegmentIds over multiple adjacent stops when files change together.
-- Promote only the files/hunks needed to understand the main review story.
-- Put secondary, mechanical, generated, docs-only, or repeated-pattern files in rest[] as supporting files, grouped by reason.
+- Use 2-${MAX_WALKTHROUGH_PHASES} conceptual phases. Phase titles render in a compact top bar: 1-2 short words and at most 16 characters, e.g. "UI", "CLI", "Tests", "Docs", "Runtime", "Cleanup".
+- Do not create one stop per file. Each stop should name one review idea and use relatedSegmentIds for up to 8 files that belong to that idea.
+- Put files not used in sequence/relatedSegmentIds into rest[] with shared reasons. Sequence + relatedSegmentIds + rest should reference every segment exactly once.
+- Prefer fewer stronger stops over exhaustive prose. Deleted legacy files, docs, tests, CSS, generated files, and repeated patterns usually belong in rest[] unless essential to the story.
 - For working-tree sources, include commit.title and commit.body by default unless there are no commit-worthy files. Put the subject line in commit.title, not as the first line of commit.body.
 `;
 };
@@ -801,16 +860,13 @@ const buildNarrativeWalkthroughPrompt = (
   agentLabel = 'Codex',
 ) => `You are authoring Codiff's narrative walkthrough JSON.
 
-Return JSON only. Do not inspect the repository or run shell commands; use only the guide, optional conversation context, and repository digest below.
+Return JSON only and match the provided schema exactly. Do not inspect the repository or run shell commands; use only the optional conversation context and repository digest below.
 
 ${buildWalkthroughSizingGuidance(state)}
 
-Current Codiff walkthrough guide:
-${readFileSync(join(root, 'bin/walkthrough-guide.md'), 'utf8').trim()}
-
 ${buildWalkthroughContextInput(context, agentLabel)}
 Repository change digest:
-${JSON.stringify(buildPromptInput(state), null, 2)}
+${JSON.stringify(buildPromptInput(state))}
 `;
 
 /**
@@ -828,7 +884,7 @@ const readNarrativeWalkthrough = async (state, agent, agentOptions, context) => 
       narrativeWalkthroughResponseSchema,
       'walkthrough.json',
       `${agent.label} walkthrough timed out.`,
-      agentOptions,
+      { ...agentOptions, reasoningEffort: 'low' },
     );
     const parsed = parseJSONMessage(response);
     const normalizedInput =

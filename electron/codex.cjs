@@ -16,7 +16,7 @@ const {
 
 const CODEX_TIMEOUT_MS = 45_000;
 const DEFAULT_OPENAI_MODEL = 'gpt-5.3-codex-spark';
-const FALLBACK_OPENAI_MODEL = 'gpt-5.3-codex';
+const FALLBACK_OPENAI_MODEL = 'gpt-5.5';
 const CODEX_REASONING_EFFORT = 'high';
 const CODEX_MACOS_BLOCKED_MESSAGE =
   'macOS blocked the local Codex CLI. Update Codex CLI from the official OpenAI release, then run `codex --version` and try again.';
@@ -28,6 +28,7 @@ const CODEX_NOT_FOUND_MESSAGE =
  *   fallbackModel?: string;
  *   model?: string;
  *   onModelFallback?: (fallbackModel: string, originalModel: string) => Promise<void> | void;
+ *   reasoningEffort?: 'low' | 'medium' | 'high';
  * }} CodexOptions
  */
 /**
@@ -40,18 +41,15 @@ const CODEX_NOT_FOUND_MESSAGE =
 const OPENAI_MODELS = Object.freeze([
   {
     id: DEFAULT_OPENAI_MODEL,
-    label: 'Best: GPT-5.3 Codex Spark',
+    label: 'Default: GPT-5.3 Codex Spark',
   },
   {
     id: FALLBACK_OPENAI_MODEL,
-    label: 'Reliable: GPT-5.3 Codex',
-  },
-  {
-    id: 'gpt-5.5',
-    label: 'Latest: GPT-5.5',
+    label: 'Strong: GPT-5.5',
   },
 ]);
 const OPENAI_MODEL_IDS = new Set(OPENAI_MODELS.map((model) => model.id));
+const CODEX_REASONING_EFFORTS = new Set(['low', 'medium', 'high']);
 
 /** @param {string} [detail] */
 const createCodexNotFoundError = (detail) =>
@@ -203,6 +201,11 @@ const runCodex = async (
 ) => {
   const model = normalizeOpenAIModel(options.model);
   const fallbackModel = normalizeOpenAIModel(options.fallbackModel || FALLBACK_OPENAI_MODEL);
+  const reasoningEffort = normalizeEnum(
+    options.reasoningEffort,
+    CODEX_REASONING_EFFORTS,
+    CODEX_REASONING_EFFORT,
+  );
 
   /** @param {string} codexModel @returns {Promise<string>} */
   const invokeCodex = async (codexModel) => {
@@ -225,7 +228,7 @@ const runCodex = async (
           '-m',
           codexModel,
           '-c',
-          `model_reasoning_effort="${CODEX_REASONING_EFFORT}"`,
+          `model_reasoning_effort="${reasoningEffort}"`,
           '--cd',
           repoRoot,
           '--sandbox',

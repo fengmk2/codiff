@@ -147,10 +147,18 @@ export const buildOrderView = (
     }
   }
 
-  const phases: Array<WalkthroughPhaseView> = order.phases.map((phase) => ({
-    ...phase,
-    stops: sequence.filter((stop) => stop.phaseId === phase.id),
-  }));
+  const phases: Array<WalkthroughPhaseView> = order.phases
+    .map((phase, phaseIndex) => ({
+      ...phase,
+      phaseIndex,
+      stops: sequence.filter((stop) => stop.phaseId === phase.id),
+    }))
+    .sort((a, b) => {
+      const aIndex = a.stops[0]?.index ?? Number.MAX_SAFE_INTEGER;
+      const bIndex = b.stops[0]?.index ?? Number.MAX_SAFE_INTEGER;
+      return aIndex === bIndex ? a.phaseIndex - b.phaseIndex : aIndex - bIndex;
+    })
+    .map(({ phaseIndex, ...phase }) => phase);
 
   const rest: Array<WalkthroughRestView> = [];
   for (const item of order.rest) {
@@ -254,12 +262,73 @@ export const changeTypeLabel: Record<WalkthroughChangeType, string> = {
 
 const fileBaseName = (path: string) => path.split('/').pop() ?? path;
 
+const countPatchLines = (patch: string): NarrativeLineCount => {
+  let added = 0;
+  let deleted = 0;
+  for (const line of patch.split('\n')) {
+    if (line.startsWith('+++') || line.startsWith('---')) {
+      continue;
+    }
+    if (line.startsWith('+')) {
+      added += 1;
+    } else if (line.startsWith('-')) {
+      deleted += 1;
+    }
+  }
+
+  return { added, deleted };
+};
+
+const getChangedFileLineCount = (file: ChangedFile): NarrativeLineCount =>
+  file.sections.reduce(
+    (totals, section) => {
+      const count = countPatchLines(section.patch || '');
+      return {
+        added: totals.added + count.added,
+        deleted: totals.deleted + count.deleted,
+      };
+    },
+    { added: 0, deleted: 0 },
+  );
+
+export const buildGenericCommitModel = (changedFiles: ReadonlyArray<ChangedFile>): CommitModel => {
+  const files = changedFiles.map((changedFile) => {
+    const totals = getChangedFileLineCount(changedFile);
+    return {
+      added: totals.added,
+      deleted: totals.deleted,
+      name: fileBaseName(changedFile.path),
+      path: changedFile.path,
+      segmentId: `__file:${changedFile.path}`,
+    };
+  });
+
+  return {
+    files,
+    groups:
+      files.length > 0
+        ? [
+            {
+              files,
+              icon: 'path',
+              id: '__changed',
+              isRest: false,
+              title: 'Changed files',
+            },
+          ]
+        : [],
+  };
+};
+
 /**
  * Collapse one order's view into the unique changed files, grouped by phase with
  * "the rest" as a final group. Line counts are summed across every segment that
  * shares a path, and a path is placed in the first group that mentions it.
  */
-export const buildCommitModel = (orderView: WalkthroughOrderView): CommitModel => {
+export const buildCommitModel = (
+  orderView: WalkthroughOrderView,
+  changedFiles: ReadonlyArray<ChangedFile> = [],
+): CommitModel => {
   const totalsByPath = new Map<string, NarrativeLineCount>();
   const addTotals = (segment: WalkthroughSegment) => {
     const current = totalsByPath.get(segment.path) ?? { added: 0, deleted: 0 };
@@ -338,6 +407,34 @@ export const buildCommitModel = (orderView: WalkthroughOrderView): CommitModel =
       id: '__rest',
       isRest: true,
       title: orderView.order.restLabel,
+    });
+  }
+
+  const missingFiles: Array<CommitFile> = [];
+  for (const changedFile of changedFiles) {
+    if (seen.has(changedFile.path)) {
+      continue;
+    }
+    seen.add(changedFile.path);
+    const totals = getChangedFileLineCount(changedFile);
+    const file = {
+      added: totals.added,
+      deleted: totals.deleted,
+      name: fileBaseName(changedFile.path),
+      note: 'Not included in the generated walkthrough.',
+      path: changedFile.path,
+      segmentId: `__file:${changedFile.path}`,
+    };
+    missingFiles.push(file);
+    files.push(file);
+  }
+  if (missingFiles.length > 0) {
+    groups.push({
+      files: missingFiles,
+      icon: 'path',
+      id: '__missing',
+      isRest: true,
+      title: 'Other changes',
     });
   }
 

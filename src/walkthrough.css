@@ -45,6 +45,11 @@
   display: inline-flex;
   font-size: 15px;
 }
+.wt-toc-chapter-icon svg,
+.wt-arc-chapter-label svg,
+.wt-upnext-action > svg {
+  flex-shrink: 0;
+}
 .wt-toc-chapter-title {
   color: var(--text);
   font: 700 11px/1.2 var(--font-sans);
@@ -493,6 +498,15 @@
 .wt-stop-block:first-child {
   border-top: 0;
 }
+.wt-stop-placeholder {
+  border-top: 1px solid var(--file-border);
+  contain: layout paint;
+  flex: none;
+  pointer-events: none;
+}
+.wt-stop-placeholder:first-child {
+  border-top: 0;
+}
 .wt-stop-block.current > .wt-stop-header {
   box-shadow: inset 3px 0 0 var(--tree-selection-focus);
 }
@@ -664,23 +678,20 @@
   display: flex;
   flex: 1;
   flex-direction: column;
+  height: 100%;
   min-height: 0;
 }
 .wt-commit-bar {
-  align-items: center;
   background: var(--app-bg);
   border-bottom: 1px solid var(--file-border);
-  display: flex;
-  flex: none;
-  gap: 12px;
   padding: 12px 16px;
 }
+.wt-commit-bar > * + * {
+  margin-left: 12px;
+}
 .wt-commit-bar-title {
-  align-items: center;
   color: var(--text);
-  display: flex;
-  font: 700 13px/1 var(--font-sans);
-  gap: 8px;
+  font: 700 24px/1.18 var(--font-sans);
   min-width: 0;
 }
 .wt-commit-bar-branch {
@@ -1106,41 +1117,39 @@
   flex: none;
   gap: 12px;
   justify-content: flex-end;
-  padding: 12px 16px;
+  padding: 9px 12px;
 }
 .wt-commit-foot-actions {
   display: flex;
   gap: 8px;
 }
-.wt-commit-btn {
-  align-items: center;
+.codiff-open-button.wt-commit-btn {
   background: var(--viewed);
-  border: 0;
-  border-radius: 14px;
-  box-shadow: 0 10px 30px -16px color-mix(in srgb, var(--viewed) 90%, transparent);
+  border-color: color-mix(in srgb, var(--viewed) 46%, transparent);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0) inset,
+    0 10px 32px -24px rgb(0 0 0 / 0),
+    0 8px 20px -16px rgb(0 0 0 / 0),
+    0 10px 30px -16px color-mix(in srgb, var(--viewed) 90%, transparent);
   color: #fff;
-  cursor: pointer;
-  display: inline-flex;
-  font: 700 13px/1 var(--font-sans);
-  gap: 8px;
-  min-height: 38px;
-  padding: 0 16px;
-  transition:
-    transform 250ms cubic-bezier(0.34, 1.56, 0.64, 1),
-    filter 160ms ease;
 }
-.wt-commit-btn:hover:not(:disabled) {
-  filter: brightness(1.06);
-  transform: scale(1.03);
+.codiff-open-button.wt-commit-btn:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--viewed) 92%, #fff);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.2) inset,
+    0 10px 32px -24px rgb(0 0 0 / 0.92),
+    0 8px 20px -16px rgb(0 0 0 / 0.82),
+    0 10px 30px -16px color-mix(in srgb, var(--viewed) 90%, transparent);
+  transform: scale(1.05);
 }
-.wt-commit-btn:active:not(:disabled) {
-  transform: scale(0.97);
+.codiff-open-button.wt-commit-btn:active:not(:disabled) {
+  transform: scale(0.95);
 }
-.wt-commit-btn:disabled {
+.codiff-open-button.wt-commit-btn:disabled {
   background: var(--hover-wash);
+  border-color: rgb(127 127 127 / 0.18);
   box-shadow: none;
   color: var(--muted);
-  cursor: default;
 }
 .wt-commit-btn .lc {
   color: #fff;

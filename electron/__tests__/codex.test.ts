@@ -28,12 +28,14 @@ const {
     schema: unknown,
     outputName?: string,
     timeoutMessage?: string,
-    options?: { model?: string },
+    options?: { model?: string; reasoningEffort?: 'low' | 'medium' | 'high' },
   ) => Promise<string>;
 };
 
 test('normalizes OpenAI model preferences to known models', () => {
-  expect(normalizeOpenAIModel('gpt-5.3-codex')).toBe('gpt-5.3-codex');
+  expect(normalizeOpenAIModel('gpt-5.5')).toBe('gpt-5.5');
+  expect(normalizeOpenAIModel('gpt-5.4-mini')).toBe(DEFAULT_OPENAI_MODEL);
+  expect(normalizeOpenAIModel('gpt-5.3-codex')).toBe(DEFAULT_OPENAI_MODEL);
   expect(normalizeOpenAIModel('gpt-4o')).toBe(DEFAULT_OPENAI_MODEL);
 });
 
@@ -138,7 +140,53 @@ exit 1
     expect(args).toContain('--ephemeral');
     expect(args).toContain('--cd');
     expect(args).toContain('/repo');
+    expect(args).toContain('model_reasoning_effort="high"');
     expect(args).not.toContain('resume');
+  } finally {
+    if (previousCodexPath == null) {
+      delete process.env.CODIFF_CODEX_PATH;
+    } else {
+      process.env.CODIFF_CODEX_PATH = previousCodexPath;
+    }
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test('forwards per-call Codex reasoning effort overrides', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codiff-codex-'));
+  const fakeCodexPath = join(directory, 'codex');
+  const argsPath = join(directory, 'args.txt');
+  const previousCodexPath = process.env.CODIFF_CODEX_PATH;
+
+  try {
+    await writeFile(
+      fakeCodexPath,
+      `#!/bin/sh
+for arg in "$@"; do
+  printf '%s\\n' "$arg" >> "${argsPath}"
+done
+while [ "$#" -gt 0 ]; do
+  if [ "$1" = "--output-last-message" ]; then
+    shift
+    printf '{"version":1}' > "$1"
+    exit 0
+  fi
+  shift
+done
+exit 1
+`,
+    );
+    await chmod(fakeCodexPath, 0o755);
+    process.env.CODIFF_CODEX_PATH = fakeCodexPath;
+
+    await expect(
+      runCodex('/repo', 'prompt', {}, 'walkthrough.json', 'Timed out.', {
+        reasoningEffort: 'low',
+      }),
+    ).resolves.toBe('{"version":1}');
+
+    const args = (await readFile(argsPath, 'utf8')).trim().split('\n');
+    expect(args).toContain('model_reasoning_effort="low"');
   } finally {
     if (previousCodexPath == null) {
       delete process.env.CODIFF_CODEX_PATH;
@@ -158,7 +206,6 @@ test('surfaces structured Codex CLI errors without the full prompt stream', asyn
     await writeFile(
       fakeCodexPath,
       `#!/bin/sh
-cat >/dev/null
 printf '%s\\n' 'user very long prompt that should not be shown'
 printf '%s\\n' 'ERROR: {"type":"error","error":{"message":"Invalid schema for response_format."}}' >&2
 exit 1

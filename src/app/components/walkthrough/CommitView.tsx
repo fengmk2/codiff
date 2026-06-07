@@ -1,10 +1,9 @@
 import { useState } from 'react';
 import {
-  buildCommitModel,
   changeTypeLabel,
   type CommitFile,
   type CommitGroup,
-  type WalkthroughOrderView,
+  type CommitModel,
 } from '../../../lib/narrative-walkthrough.ts';
 import type {
   WalkthroughCommitMessageRequest,
@@ -14,12 +13,21 @@ import type {
 } from '../../../types.ts';
 import { ArrowsClockwise, Check, GitBranch } from './icons.tsx';
 import { PhaseIcon, WalkthroughLineCount } from './parts.tsx';
-import type { NarrativeNavigation } from './useNarrativeNavigation.ts';
 
 export type CommitHandler = (request: WalkthroughCommitRequest) => Promise<WalkthroughCommitResult>;
 export type CommitMessageHandler = (
   request: WalkthroughCommitMessageRequest,
 ) => Promise<WalkthroughCommitMessageResult>;
+
+export type CommitDraftState = {
+  commitBody: string;
+  commitSelected: ReadonlySet<string>;
+  commitSubject: string;
+  setCommitBody: (value: string) => void;
+  setCommitSubject: (value: string) => void;
+  toggleCommitFile: (path: string) => void;
+  toggleCommitGroup: (paths: ReadonlyArray<string>) => void;
+};
 
 type CheckState = 'on' | 'off' | 'partial';
 
@@ -202,24 +210,24 @@ function MessageDraft({
 
 export function CommitView({
   branch,
-  navigation,
+  draft,
+  model,
   onCommit,
   onUpdateMessage,
 }: {
   branch: string | null;
-  navigation: NarrativeNavigation;
+  draft: CommitDraftState;
+  model: CommitModel;
   onCommit: CommitHandler;
   onUpdateMessage: CommitMessageHandler;
 }) {
-  const orderView = navigation.orderView as WalkthroughOrderView;
-  const model = buildCommitModel(orderView);
-  const selected = navigation.commitSelected;
+  const selected = draft.commitSelected;
   const selectedFiles = model.files.filter((file) => selected.has(file.path));
   const totals = selectedFiles.reduce(
     (sum, file) => ({ added: sum.added + file.added, deleted: sum.deleted + file.deleted }),
     { added: 0, deleted: 0 },
   );
-  const subject = navigation.commitSubject;
+  const subject = draft.commitSubject;
   const allSelected = selectedFiles.length === model.files.length;
 
   const [status, setStatus] = useState<'idle' | 'submitting'>('idle');
@@ -244,15 +252,15 @@ export function CommitView({
     setUpdating(true);
     setUpdateError(null);
     const next = await onUpdateMessage({
-      body: navigation.commitBody,
+      body: draft.commitBody,
       paths: selectedFiles.map((file) => file.path),
       subject: subject.trim(),
     });
     setUpdating(false);
     if (next.status === 'ready') {
-      navigation.setCommitBody(next.body);
+      draft.setCommitBody(next.body);
       if (next.subject) {
-        navigation.setCommitSubject(next.subject);
+        draft.setCommitSubject(next.subject);
       }
       setBodyFlash(true);
       window.setTimeout(() => setBodyFlash(false), 700);
@@ -268,7 +276,7 @@ export function CommitView({
     setStatus('submitting');
     setResult(null);
     const next = await onCommit({
-      body: navigation.commitBody.trim(),
+      body: draft.commitBody.trim(),
       paths: selectedFiles.map((file) => file.path),
       subject: subject.trim(),
     });
@@ -312,15 +320,15 @@ export function CommitView({
           {result?.status === 'failed' ? (
             <div className="wt-commit-error">{result.reason}</div>
           ) : null}
-          <SubjectInput onChange={navigation.setCommitSubject} value={navigation.commitSubject} />
+          <SubjectInput onChange={draft.setCommitSubject} value={draft.commitSubject} />
           <MessageDraft
             canUpdate={canUpdate}
             flash={bodyFlash}
-            onChange={navigation.setCommitBody}
+            onChange={draft.setCommitBody}
             onUpdate={updateMessage}
             updateError={updateError}
             updating={updating}
-            value={navigation.commitBody}
+            value={draft.commitBody}
           />
           <div className="wt-stage-files">
             <div className="wt-stage-files-head">
@@ -333,8 +341,8 @@ export function CommitView({
               <StageGroupRow
                 group={group}
                 key={group.id}
-                onToggleFile={navigation.toggleCommitFile}
-                onToggleGroup={navigation.toggleCommitGroup}
+                onToggleFile={draft.toggleCommitFile}
+                onToggleGroup={draft.toggleCommitGroup}
                 selected={selected}
               />
             ))}
@@ -343,7 +351,12 @@ export function CommitView({
       </div>
       <div className="wt-commit-foot">
         <span className="wt-commit-foot-actions">
-          <button className="wt-commit-btn" disabled={!canCommit} onClick={submit} type="button">
+          <button
+            className="codiff-open-button wt-commit-btn"
+            disabled={!canCommit}
+            onClick={submit}
+            type="button"
+          >
             <GitBranch size={16} />
             <span>
               {committed ? 'Committed' : status === 'submitting' ? 'Committing…' : 'Commit'}

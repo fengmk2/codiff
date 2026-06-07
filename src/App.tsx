@@ -20,6 +20,7 @@ import {
 } from './app/components/Panels.tsx';
 import { ReviewCodeView } from './app/components/ReviewCodeView.tsx';
 import { Sidebar } from './app/components/Sidebar.tsx';
+import { CommitView } from './app/components/walkthrough/CommitView.tsx';
 import { NarrativeWalkthroughView } from './app/components/walkthrough/NarrativeWalkthroughView.tsx';
 import { useNarrativeNavigation } from './app/components/walkthrough/useNarrativeNavigation.ts';
 import { createDefaultConfig } from './config/defaults.ts';
@@ -56,6 +57,7 @@ import {
 } from './lib/diff.ts';
 import { compactPath, fuzzyMatches, sortFiles } from './lib/files.ts';
 import { isNativeInputTarget } from './lib/keyboard.ts';
+import { buildCommitModel, buildGenericCommitModel } from './lib/narrative-walkthrough.ts';
 import {
   consumeReloadSelection,
   getReloadDeltaPaths,
@@ -98,6 +100,8 @@ import type {
 } from './types.ts';
 
 const emptyWalkthroughNotes = new Map<string, WalkthroughNote>();
+const emptyFiles: ReadonlyArray<ChangedFile> = [];
+type MainMode = 'review' | 'commit';
 
 const getFailedSectionLoadState = (section: DiffSection): DiffSection =>
   isPatchOnlyDiffSection(section)
@@ -181,6 +185,7 @@ export default function App() {
   const [walkthroughError, setWalkthroughError] = useState<WalkthroughError | null>(null);
   const [walkthroughLoading, setWalkthroughLoading] = useState(false);
   const [walkthroughUnread, setWalkthroughUnread] = useState(false);
+  const [mainMode, setMainMode] = useState<MainMode>('review');
   const historyRequestRef = useRef(0);
   const loadingSectionKeysRef = useRef<Set<string>>(new Set());
   const programmaticScrollPathRef = useRef<string | null>(null);
@@ -195,9 +200,12 @@ export default function App() {
   const sourceRequestRef = useRef(0);
   const viewedRef = useRef<Record<string, string>>({});
   const narrativeWalkthroughRef = useRef<NarrativeWalkthrough | null>(null);
+  const navigationResetKey = state ? `${state.root}:${getSourceKey(state.source)}` : '';
   const narrativeNavigation = useNarrativeNavigation(
     narrativeWalkthrough,
+    state?.files ?? emptyFiles,
     preferences.walkthroughOrder,
+    navigationResetKey,
   );
   const walkthroughErrorRef = useRef<WalkthroughError | null>(null);
   const [commandBarVisible, setCommandBarVisible] = useState(false);
@@ -880,6 +888,14 @@ export default function App() {
         return;
       }
       if (!isNativeInputTarget(event.target)) {
+        if (
+          sidebarModeRef.current === 'walkthrough' &&
+          narrativeWalkthroughRef.current &&
+          (matchesShortcut(event, codiffConfig.keymap, 'nextHunk') ||
+            matchesShortcut(event, codiffConfig.keymap, 'prevHunk'))
+        ) {
+          return;
+        }
         if (matchesShortcut(event, codiffConfig.keymap, 'nextHunk')) {
           event.preventDefault();
           navigateHunks(1);
@@ -1005,11 +1021,13 @@ export default function App() {
   );
 
   const selectPath = useCallback((path: string) => {
+    setMainMode('review');
     setSelectedPath(path);
   }, []);
 
   const activatePath = useCallback(
     (path: string) => {
+      setMainMode('review');
       setSelectedPath(path);
       scrollPathIntoReview(path, 'smooth');
     },
@@ -1071,6 +1089,7 @@ export default function App() {
       setDiffSearchQuery('');
       setActiveDiffSearchMatchIndex(0);
       setScrollTarget(null);
+      setMainMode('review');
 
       window.codiff
         .getRepositoryState(source)
@@ -1189,6 +1208,7 @@ export default function App() {
 
   const changeSidebarMode = useCallback(
     (mode: SidebarMode) => {
+      setMainMode('review');
       if (mode === 'tree') {
         setSidebarMode('tree');
         return;
@@ -1250,6 +1270,22 @@ export default function App() {
     },
     [narrativeWalkthrough, state, walkthroughError, walkthroughLoading],
   );
+
+  const openCommitView = useCallback(() => {
+    const currentState = stateRef.current;
+    if (
+      !currentState ||
+      currentState.source.type !== 'working-tree' ||
+      currentState.files.length === 0
+    ) {
+      return;
+    }
+    if (narrativeWalkthroughRef.current) {
+      narrativeNavigation.enterCommit();
+    }
+    setSidebarMode('tree');
+    setMainMode('commit');
+  }, [narrativeNavigation]);
 
   useEffect(() => {
     const registry = commandRegistryRef.current;
@@ -1545,51 +1581,57 @@ export default function App() {
     [bumpItemVersion, state],
   );
 
-  const createComment = useCallback((comment: Omit<ReviewComment, 'body' | 'id'>) => {
-    const emptyExistingComment = reviewCommentsRef.current.find(
-      (candidate) =>
-        candidate.body.length === 0 && getCommentKey(candidate) === getCommentKey(comment),
-    );
-    if (emptyExistingComment) {
-      setFocusCommentId(emptyExistingComment.id);
-      setFocusCommentRequest((current) => current + 1);
-      return;
-    }
+  const createComment = useCallback(
+    (comment: Omit<ReviewComment, 'body' | 'id'>) => {
+      const emptyExistingComment = reviewCommentsRef.current.find(
+        (candidate) =>
+          candidate.body.length === 0 && getCommentKey(candidate) === getCommentKey(comment),
+      );
+      if (emptyExistingComment) {
+        setFocusCommentId(emptyExistingComment.id);
+        setFocusCommentRequest((current) => current + 1);
+        return;
+      }
 
-    const emptyDraft = reviewCommentsRef.current.find(
-      (candidate) => !candidate.isReadOnly && candidate.body.length === 0,
-    );
-    if (emptyDraft) {
+      const emptyDraft = reviewCommentsRef.current.find(
+        (candidate) => !candidate.isReadOnly && candidate.body.length === 0,
+      );
+      if (emptyDraft) {
+        const id = crypto.randomUUID();
+        setFocusCommentId(id);
+        setFocusCommentRequest((current) => current + 1);
+        setReviewComments((current) =>
+          current.map((candidate) =>
+            candidate.id === emptyDraft.id
+              ? {
+                  ...comment,
+                  body: '',
+                  id,
+                }
+              : candidate,
+          ),
+        );
+        bumpItemVersion(emptyDraft.filePath);
+        bumpItemVersion(comment.filePath);
+        return;
+      }
+
       const id = crypto.randomUUID();
       setFocusCommentId(id);
       setFocusCommentRequest((current) => current + 1);
-      setReviewComments((current) =>
-        current.map((candidate) =>
-          candidate.id === emptyDraft.id
-            ? {
-                ...comment,
-                body: '',
-                id,
-              }
-            : candidate,
-        ),
-      );
-      return;
-    }
 
-    const id = crypto.randomUUID();
-    setFocusCommentId(id);
-    setFocusCommentRequest((current) => current + 1);
-
-    setReviewComments((current) => [
-      ...current,
-      {
-        ...comment,
-        body: '',
-        id,
-      },
-    ]);
-  }, []);
+      setReviewComments((current) => [
+        ...current,
+        {
+          ...comment,
+          body: '',
+          id,
+        },
+      ]);
+      bumpItemVersion(comment.filePath);
+    },
+    [bumpItemVersion],
+  );
 
   const updateComment = useCallback((commentId: string, body: string) => {
     setReviewComments((current) =>
@@ -1599,10 +1641,17 @@ export default function App() {
     );
   }, []);
 
-  const deleteComment = useCallback((commentId: string) => {
-    setFocusCommentId((current) => (current === commentId ? null : current));
-    setReviewComments((current) => current.filter((comment) => comment.id !== commentId));
-  }, []);
+  const deleteComment = useCallback(
+    (commentId: string) => {
+      const comment = reviewCommentsRef.current.find((candidate) => candidate.id === commentId);
+      setFocusCommentId((current) => (current === commentId ? null : current));
+      setReviewComments((current) => current.filter((candidate) => candidate.id !== commentId));
+      if (comment) {
+        bumpItemVersion(comment.filePath);
+      }
+    },
+    [bumpItemVersion],
+  );
 
   const updateCodexReply = useCallback(
     (commentId: string, filePath: string, codexReply: NonNullable<ReviewComment['codexReply']>) => {
@@ -1874,6 +1923,11 @@ export default function App() {
     state.source.type !== 'working-tree' ? ` · ${getSourceLabel(state.source)}` : '';
 
   const showNarrativeWalkthrough = narrativeWalkthrough != null && sidebarMode === 'walkthrough';
+  const plainCommitModel = narrativeNavigation.orderView
+    ? buildCommitModel(narrativeNavigation.orderView, state.files)
+    : buildGenericCommitModel(state.files);
+  const showPlainCommitView =
+    mainMode === 'commit' && state.source.type === 'working-tree' && state.files.length > 0;
   // Props shared by the full review and the per-stop scoped diffs, so the two
   // render paths can't drift apart.
   const commonReviewProps = {
@@ -1920,7 +1974,7 @@ export default function App() {
         files={[file]}
         forceExpandedPaths={diffSearchMatchPathSet}
         scrollTarget={null}
-        selectedPath={file.path}
+        selectedPath={null}
         walkthroughNotes={walkthroughNotes}
       />
     );
@@ -2036,6 +2090,7 @@ export default function App() {
         </div>
         <Sidebar
           branchSource={historySource?.type === 'branch' ? historySource : null}
+          commitFiles={state.files}
           currentSource={pendingSource ?? state.source}
           files={visibleFiles}
           historyEntries={historyEntries}
@@ -2048,6 +2103,7 @@ export default function App() {
           onActivatePath={activatePath}
           onLoadMoreHistory={loadMoreHistory}
           onModeChange={changeSidebarMode}
+          onOpenCommit={openCommitView}
           onSearchQueryChange={
             sidebarMode === 'history' ? setHistorySearchQuery : setFileSearchQuery
           }
@@ -2067,6 +2123,14 @@ export default function App() {
       <main className="review">
         {isSwitchingSource ? (
           <ReviewSourceLoading />
+        ) : showPlainCommitView ? (
+          <CommitView
+            branch={state.branch}
+            draft={narrativeNavigation}
+            model={plainCommitModel}
+            onCommit={commitWalkthrough}
+            onUpdateMessage={updateWalkthroughCommitMessage}
+          />
         ) : showNarrativeWalkthrough && narrativeWalkthrough ? (
           <NarrativeWalkthroughView
             files={state.files}

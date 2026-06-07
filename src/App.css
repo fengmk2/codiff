@@ -575,9 +575,17 @@
   display: flex;
   flex: none;
   font: 600 11px/1 var(--font-sans);
+  gap: 10px;
   justify-content: space-between;
-  min-height: 30px;
-  padding: 0 12px;
+  min-height: 38px;
+  padding: 6px 8px 6px 8px;
+}
+
+.sidebar-total-summary {
+  align-items: center;
+  display: inline-flex;
+  gap: 8px;
+  min-width: 0;
 }
 
 .sidebar-total-line-count {
@@ -586,6 +594,11 @@
   font-family: var(--font-mono);
   gap: 8px;
   white-space: nowrap;
+}
+
+.sidebar-commit-button {
+  flex: none;
+  color: var(--sidebar-text);
 }
 
 .file-tree-shell,
