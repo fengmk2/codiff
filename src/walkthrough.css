@@ -149,7 +149,7 @@
 .wt-toc-num {
   color: var(--muted);
   flex: none;
-  font: 700 11px/1.4 var(--font-mono);
+  font: 600 13px/1.35 var(--font-sans);
 }
 .wt-toc-title {
   color: var(--text);
