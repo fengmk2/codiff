@@ -21,6 +21,7 @@ import { fileURLToPath } from 'node:url';
 const threadId = process.env.PI_SESSION_ID || '';
 const skillRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const codiffRoot = resolve(skillRoot, '../../..');
+const sessionIdPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const maxSessionScanFiles = 20_000;
 
 const getCodiffCommand = () => {
@@ -92,7 +93,13 @@ const findPiSessionIdForCwd = (cwd) => {
             continue;
           }
           const header = JSON.parse(firstLine);
-          if (header?.type === 'session' && typeof header?.cwd === 'string' && header.cwd === cwd) {
+          if (
+            header?.type === 'session' &&
+            typeof header?.id === 'string' &&
+            sessionIdPattern.test(header.id) &&
+            typeof header?.cwd === 'string' &&
+            header.cwd === cwd
+          ) {
             const stat = statSync(path);
             candidates.push({ mtime: stat.mtimeMs, sessionId: header.id });
           }

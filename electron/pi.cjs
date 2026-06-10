@@ -1,23 +1,16 @@
 // @ts-check
 
-const { isExecutableFile } = require('./agent-shared.cjs');
-
 // Pi walkthroughs can take longer than Codex/Claude because the agent is
 // allowed to call read-only tools before producing a structured answer.
-// Codex uses 45s and Claude uses 90s; Pi is given 3 minutes to keep parity
-// with how generous the Claude budget is for a similar prompt.
+// Pi is given 3 minutes to leave room for read-only repository exploration.
 const PI_TIMEOUT_MS = 180_000;
 const DEFAULT_PI_MODEL = 'pi-default';
 const FALLBACK_PI_MODEL = 'pi-default';
 const PI_NOT_FOUND_CODE = 'PI_NOT_FOUND';
 const PI_NOT_FOUND_MESSAGE =
-  'Pi CLI was not found. Install pi and verify `pi --version` works in Terminal. Codiff searches PATH, /opt/homebrew/bin/pi, and /usr/local/bin/pi. If pi is installed somewhere else, launch Codiff with `CODIFF_PI_PATH=/absolute/path/to/pi codiff -w`.';
-const PI_NOT_IMPLEMENTED_MESSAGE =
-  'Pi agent support is not wired up in Codiff yet. The Agent → Pi selector is reserved for upcoming pi.dev integration.';
+  'Pi support could not be loaded. Reinstall Codiff and verify the bundled Pi SDK is available.';
 const PI_SDK_PACKAGE = '@earendil-works/pi-coding-agent';
 
-const modelLoadError = (/** @type {string} */ detail) =>
-  `Failed to load Pi models from ${PI_SDK_PACKAGE}. ${detail}`;
 const piRunError = (/** @type {string} */ detail) => `Pi run failed. ${detail}`;
 
 /**
@@ -41,6 +34,7 @@ const PLACEHOLDER_MODELS = Object.freeze([{ id: DEFAULT_PI_MODEL, label: 'Pi def
 let piModelsCache = PLACEHOLDER_MODELS;
 /** @type {Promise<ReadonlyArray<PiModel>> | null} */
 let piModelsLoading = null;
+let piModelsLoaded = false;
 /** @type {(() => void) | null} */
 let onPiModelsLoaded = null;
 
@@ -50,30 +44,10 @@ const createPiNotFoundError = (detail) =>
     code: PI_NOT_FOUND_CODE,
   });
 
-const getPiCommand = () => {
-  const piPath = process.env.CODIFF_PI_PATH?.trim();
-  if (piPath) {
-    if (isExecutableFile(piPath)) {
-      return piPath;
-    }
-
-    throw createPiNotFoundError(
-      `CODIFF_PI_PATH is set to ${JSON.stringify(piPath)}, but that file is not executable.`,
-    );
-  }
-
-  throw createPiNotFoundError();
-};
-
 /** @param {unknown} error */
 const isPiNotFoundError = (error) =>
   Boolean(
-    error &&
-    typeof error === 'object' &&
-    'code' in error &&
-    (error.code === PI_NOT_FOUND_CODE ||
-      error.code === 'ENOENT' ||
-      error.code === 'MODULE_NOT_FOUND'),
+    error && typeof error === 'object' && 'code' in error && error.code === PI_NOT_FOUND_CODE,
   );
 
 /**
@@ -83,7 +57,7 @@ const isPiNotFoundError = (error) =>
  */
 const isPiInstalled = async () => {
   try {
-    await import(PI_SDK_PACKAGE);
+    await loadPiSdk();
     return true;
   } catch {
     return false;
@@ -95,10 +69,10 @@ const piModelIds = () => new Set(piModelsCache.map((model) => model.id));
 
 /** @param {unknown} value @returns {string} */
 const normalizePiModel = (value) => {
-  // Don't normalize before models have loaded — the cache only contains
-  // the placeholder "pi-default" and would overwrite the user's stored
-  // selection. The caller will re-normalize once models are available.
-  if (piModelsLoading !== null || piModelsCache.length === 0) {
+  // Don't normalize before real models have loaded: the placeholder cache
+  // would overwrite the user's stored selection. The caller re-normalizes once
+  // model discovery completes.
+  if (!piModelsLoaded || piModelsLoading !== null || piModelsCache.length === 0) {
     return typeof value === 'string' ? value : DEFAULT_PI_MODEL;
   }
   const ids = piModelIds();
@@ -112,71 +86,81 @@ const normalizePiModel = (value) => {
 /** @param {string} entry @param {string} [provider] */
 const formatPiModelLabel = (entry, provider) => (provider ? `${provider}/${entry}` : entry);
 
+/** @returns {Promise<any>} */
+const loadPiSdk = async () => {
+  try {
+    return await import(PI_SDK_PACKAGE);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw createPiNotFoundError(`Could not import ${PI_SDK_PACKAGE}: ${detail}`);
+  }
+};
+
+/** @param {any} sdk */
+const createAuthStorage = (sdk) => {
+  try {
+    return sdk.AuthStorage.create();
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : String(error);
+    throw new Error(piRunError(detail));
+  }
+};
+
+/**
+ * @param {any} sdk
+ * @param {any} modelRegistry
+ * @param {string} cwd
+ */
+const loadPiExtensions = async (sdk, modelRegistry, cwd) => {
+  const { DefaultResourceLoader, getAgentDir } = sdk;
+  if (typeof DefaultResourceLoader !== 'function') {
+    return;
+  }
+
+  const agentDir = getAgentDir?.() ?? `${process.env.HOME}/.pi/agent`;
+  const loader = new DefaultResourceLoader({ agentDir, cwd });
+  await loader.reload();
+  const { runtime } = loader.getExtensions();
+  for (const registration of runtime.pendingProviderRegistrations ?? []) {
+    modelRegistry.registerProvider(registration.name, registration.config);
+  }
+};
+
+/**
+ * @param {any} modelRegistry
+ * @returns {ReadonlyArray<{ provider: string; id: string; name?: string }>}
+ */
+const getAvailablePiModels = (modelRegistry) => {
+  const available = modelRegistry.getAvailable();
+  return available.length ? available : modelRegistry.getAll();
+};
+
 /**
  * @returns {Promise<ReadonlyArray<PiModel>>}
  */
 const getPiModels = () => {
+  if (piModelsLoaded) {
+    return Promise.resolve(piModelsCache);
+  }
+
   if (piModelsLoading) {
     return piModelsLoading;
   }
 
   const loadingPromise = (async () => {
-    let sdk;
-    try {
-      sdk = await import(PI_SDK_PACKAGE);
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      throw createPiNotFoundError(modelLoadError(detail));
-    }
-
-    /** @type {any} */
-    let authStorage;
-    try {
-      authStorage = sdk.AuthStorage.create();
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      throw createPiNotFoundError(modelLoadError(detail));
-    }
-
-    /** @type {any} */
+    const sdk = await loadPiSdk();
+    const authStorage = createAuthStorage(sdk);
     const modelRegistry = sdk.ModelRegistry.create(authStorage);
 
     // Load Pi extensions so providers registered via pi.registerProvider()
     // (e.g. LM Studio, custom endpoints) are included in the model registry.
-    // DefaultResourceLoader resolves npm packages from settings.json and
-    // discovers extensions from ~/.pi/agent/extensions/ and .pi/extensions/.
     try {
-      const { DefaultResourceLoader, getAgentDir } = await import(PI_SDK_PACKAGE);
-      if (typeof DefaultResourceLoader === 'function') {
-        const cwd = process.cwd();
-        const agentDir = getAgentDir?.() ?? `${process.env.HOME}/.pi/agent`;
-        const loader = new DefaultResourceLoader({ cwd, agentDir });
-        await loader.reload();
-        const { runtime } = loader.getExtensions();
-        for (const reg of runtime.pendingProviderRegistrations ?? []) {
-          modelRegistry.registerProvider(reg.name, reg.config);
-        }
-      }
+      await loadPiExtensions(sdk, modelRegistry, process.cwd());
     } catch {
       // Extension loading is best-effort for model listing.
     }
 
-    let /** @type {any[]} */ models = [];
-    try {
-      models = modelRegistry.getAvailable();
-    } catch (error) {
-      const detail = error instanceof Error ? error.message : String(error);
-      throw createPiNotFoundError(modelLoadError(detail));
-    }
-
-    if (!models.length) {
-      try {
-        models = modelRegistry.getAll();
-      } catch (error) {
-        const detail = error instanceof Error ? error.message : String(error);
-        throw createPiNotFoundError(modelLoadError(detail));
-      }
-    }
+    const models = getAvailablePiModels(modelRegistry);
 
     const next = models
       .map((/** @type {any} */ model) => {
@@ -190,6 +174,7 @@ const getPiModels = () => {
       piModelsCache = Object.freeze(next);
     }
 
+    piModelsLoaded = true;
     onPiModelsLoaded?.();
 
     return piModelsCache;
@@ -201,38 +186,6 @@ const getPiModels = () => {
 
   return piModelsLoading;
 };
-
-/**
- * Synchronous proxy that reflects the current {@link piModelsCache}. The
- * `agent.cjs` factory pulls this in eagerly, so a Proxy is used to defer
- * resolution until {@link getPiModels} has populated the cache.
- *
- * @type {ReadonlyArray<PiModel>}
- */
-const PI_MODELS = new Proxy(/** @type {any} */ ([]), {
-  get(_target, prop) {
-    if (prop === 'length') {
-      return piModelsCache.length;
-    }
-    if (prop === Symbol.iterator) {
-      return piModelsCache[Symbol.iterator].bind(piModelsCache);
-    }
-    const index = Number(prop);
-    if (Number.isInteger(index) && index >= 0 && index < piModelsCache.length) {
-      return piModelsCache[index];
-    }
-    return Reflect.get(piModelsCache, prop);
-  },
-  has(_target, prop) {
-    return Reflect.has(piModelsCache, prop);
-  },
-  ownKeys() {
-    return Reflect.ownKeys(/** @type {any} */ (piModelsCache));
-  },
-  getOwnPropertyDescriptor(_target, prop) {
-    return Reflect.getOwnPropertyDescriptor(/** @type {any} */ (piModelsCache), prop);
-  },
-});
 
 /** @returns {ReadonlyArray<PiModel>} */
 const getCachedPiModels = () => piModelsCache;
@@ -307,13 +260,7 @@ const SCHEMA_FIELD_ALIASES = Object.freeze([
   ['reply', 'response'],
   ['reply', 'answer'],
   ['reply', 'message'],
-  ['reply', 'summary'],
   ['reply', 'body'],
-  ['summary', 'overview'],
-  ['summary', 'headline'],
-  ['focus', 'summary'],
-  ['skim', 'glance'],
-  ['version', 'v'],
 ]);
 
 /**
@@ -425,46 +372,20 @@ const runPi = async (
   timeoutMessage = 'Pi timed out.',
   options = {},
 ) => {
-  /** @type {any} */
-  let sdk;
-  try {
-    sdk = await import(PI_SDK_PACKAGE);
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw createPiNotFoundError(piRunError(detail));
-  }
-
-  /** @type {any} */
-  let authStorage;
-  try {
-    authStorage = sdk.AuthStorage.create();
-  } catch (error) {
-    const detail = error instanceof Error ? error.message : String(error);
-    throw new Error(piRunError(detail));
-  }
-
-  const /** @type {any} */ modelRegistry = sdk.ModelRegistry.create(authStorage);
+  const sdk = await loadPiSdk();
+  const authStorage = createAuthStorage(sdk);
+  const modelRegistry = sdk.ModelRegistry.create(authStorage);
 
   // Load extensions so providers registered via pi.registerProvider()
   // (e.g. LM Studio) are available for model resolution.
   try {
-    const { DefaultResourceLoader, getAgentDir } = sdk;
-    if (typeof DefaultResourceLoader === 'function') {
-      const agentDir = getAgentDir?.() ?? `${process.env.HOME}/.pi/agent`;
-      const loader = new DefaultResourceLoader({ cwd: repoRoot, agentDir });
-      await loader.reload();
-      const { runtime } = loader.getExtensions();
-      for (const reg of runtime.pendingProviderRegistrations ?? []) {
-        modelRegistry.registerProvider(reg.name, reg.config);
-      }
-    }
+    await loadPiExtensions(sdk, modelRegistry, repoRoot);
   } catch {
     // Extension loading is best-effort.
   }
 
-  const available = modelRegistry.getAvailable();
-  const all = available.length ? available : modelRegistry.getAll();
-  const model = resolveModel(options.model, modelRegistry, all);
+  const available = getAvailablePiModels(modelRegistry);
+  const model = resolveModel(options.model, modelRegistry, available);
   if (!model) {
     throw new Error(
       piRunError('No Pi models are available. Set an API key for any provider and try again.'),
@@ -503,15 +424,11 @@ const runPi = async (
 
   /** @type {NodeJS.Timeout | undefined} */
   let timeoutHandle;
-  const isLocalProvider = /** @type {any} */ (model).provider === 'lmstudio';
-  const timeoutPromise = isLocalProvider
-    ? // Local LLMs can be very slow — no timeout.
-      new Promise(() => {})
-    : new Promise((_, reject) => {
-        timeoutHandle = setTimeout(() => {
-          reject(new Error(timeoutMessage));
-        }, PI_TIMEOUT_MS);
-      });
+  const timeoutPromise = new Promise((_, reject) => {
+    timeoutHandle = setTimeout(() => {
+      reject(new Error(timeoutMessage));
+    }, PI_TIMEOUT_MS);
+  });
 
   const finishWithError = async (/** @type {unknown} */ error) => {
     try {
@@ -528,7 +445,6 @@ const runPi = async (
     await Promise.race([session.prompt(effectivePrompt), timeoutPromise]).catch(finishWithError);
 
     const messages = /** @type {any[]} */ (session.messages);
-    console.log('Pi messages:', messages);
     /**
      * @param {unknown} value
      * @returns {string}
@@ -630,13 +546,10 @@ const setOnPiModelsLoaded = (callback) => {
 module.exports = {
   DEFAULT_PI_MODEL,
   FALLBACK_PI_MODEL,
-  PI_MODELS,
   PI_NOT_FOUND_CODE,
   PI_NOT_FOUND_MESSAGE,
-  PI_NOT_IMPLEMENTED_MESSAGE,
   PI_TIMEOUT_MS,
   getCachedPiModels,
-  getPiCommand,
   getPiModels,
   isPiInstalled,
   isPiNotFoundError,

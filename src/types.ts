@@ -324,7 +324,7 @@ export type WalkthroughCommit = {
 };
 
 export type NarrativeWalkthrough = {
-  agent: 'codex' | 'claude';
+  agent: 'codex' | 'claude' | 'pi';
   chapters: ReadonlyArray<WalkthroughChapter>;
   /**
    * When present, the diff is a committable staging set: Codiff adds a commit

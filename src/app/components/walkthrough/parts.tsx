@@ -1,12 +1,15 @@
 import claudeIconUrl from '../../../assets/claude.svg';
 import codexIconUrl from '../../../assets/codex.svg';
+import piIconUrl from '../../../assets/pi.svg';
 import { renderInlineMarkdown } from '../../../lib/markdown.tsx';
 import { importanceLabel } from '../../../lib/narrative-walkthrough.ts';
-import type { WalkthroughIcon, WalkthroughStop } from '../../../types.ts';
+import type { NarrativeWalkthrough, WalkthroughIcon, WalkthroughStop } from '../../../types.ts';
 import { chapterIcons } from './icons.tsx';
 
-export function AgentLogo({ agentId }: { agentId: 'codex' | 'claude' }) {
-  return <img alt="" draggable={false} src={agentId === 'claude' ? claudeIconUrl : codexIconUrl} />;
+export function AgentLogo({ agentId }: { agentId: NarrativeWalkthrough['agent'] }) {
+  const iconUrl =
+    agentId === 'pi' ? piIconUrl : agentId === 'claude' ? claudeIconUrl : codexIconUrl;
+  return <img alt="" draggable={false} src={iconUrl} />;
 }
 
 export function ChapterIcon({ icon, size = 13 }: { icon: WalkthroughIcon; size?: number }) {

@@ -642,6 +642,54 @@ test('Claude skill launcher uses the session cwd and forwards --agent claude', a
   }
 });
 
+test('Pi skill launcher resolves the current session and forwards --agent pi', async () => {
+  const logger = await createFakeCommandLogger('codiff-pi-launcher-', 'codiff');
+  const home = join(logger.directory, 'home');
+  const repositoryPath = join(logger.directory, 'repo');
+  const sessionId = '019e5e57-e7d6-7392-9ad1-ad959319d2fb';
+  const sessionDirectory = join(home, '.pi', 'agent', 'sessions', 'encoded-repo');
+  const sessionPath = join(sessionDirectory, `2026-06-10_${sessionId}.jsonl`);
+  const walkthroughFile = join(logger.directory, 'walkthrough.json');
+
+  try {
+    await mkdir(repositoryPath, { recursive: true });
+    const realRepositoryPath = await realpath(repositoryPath);
+    await mkdir(sessionDirectory, { recursive: true });
+    await writeFile(walkthroughFile, '{}');
+    await writeFile(
+      sessionPath,
+      `${JSON.stringify({ cwd: realRepositoryPath, id: sessionId, type: 'session' })}\n`,
+    );
+
+    await execFileAsync(
+      process.execPath,
+      [resolve('pi/skills/codiff/scripts/open-codiff.mjs'), '--file', walkthroughFile, 'HEAD'],
+      {
+        cwd: repositoryPath,
+        env: {
+          ...logger.env,
+          CODIFF_COMMAND: logger.commandPath,
+          PI_HOME: join(home, '.pi'),
+        },
+      },
+    );
+
+    expect(await logger.readArgs()).toEqual([
+      '-w',
+      '--agent',
+      'pi',
+      '--walkthrough-file',
+      walkthroughFile,
+      '--pi-session',
+      sessionId,
+      'HEAD',
+      realRepositoryPath,
+    ]);
+  } finally {
+    await logger.cleanup();
+  }
+});
+
 test('packaged terminal helper forwards the agent and Claude session to Electron', async () => {
   const logger = await createFakeOpenLogger();
   const repositoryPath = join(logger.directory, 'repo');

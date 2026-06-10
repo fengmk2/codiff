@@ -31,7 +31,7 @@ const { normalizeClaudeModel } = require('./claude.cjs');
 const { createWalkthroughCommit } = require('./walkthrough-commit.cjs');
 const { diagnoseWalkthroughMismatch } = require('./walkthrough-diagnosis.cjs');
 const { readCommitMessageReply } = require('./walkthrough-commit-message.cjs');
-const { normalizePiModel, setOnPiModelsLoaded } = require('./pi.cjs');
+const { getPiModels, normalizePiModel, setOnPiModelsLoaded } = require('./pi.cjs');
 const { getAgent, listAgents, normalizeAgentBackend } = require('./agent.cjs');
 const {
   configToPreferences,
@@ -199,6 +199,7 @@ const selectAgentBackend = (backend) => {
   }
 
   updateConfig({ settings: { ...config.settings, agentBackend } });
+  refreshAgentModels(getAgent(agentBackend));
 };
 
 /** @param {import('./agent.cjs').Agent} agent @param {string} model */
@@ -220,6 +221,13 @@ const getAgentOptions = (agent) => ({
     updateConfig({ settings: { ...config.settings, [agent.modelSettingKey]: fallbackModel } });
   },
 });
+
+/** @param {import('./agent.cjs').Agent} agent */
+const refreshAgentModels = (agent) => {
+  if (agent.id === 'pi') {
+    getPiModels().catch(() => {});
+  }
+};
 
 /**
  * @param {import('../src/types.ts').WalkthroughContext | null | undefined} providedContext
@@ -365,40 +373,19 @@ const openRepositoryFolder = async (browserWindow) => {
   }
 };
 
-/**
- * @param {import('./agent.cjs').Agent} agent
- * @returns {string}
- */
-const getActiveModelShortName = (agent) => {
-  const key = /** @type {keyof typeof config.settings} */ (agent.modelSettingKey);
-  const raw = config.settings[key];
-  const modelId = typeof raw === 'string' ? raw : '';
-  if (!modelId) return '';
-  const match = agent.models.find((model) => model.id === modelId);
-  if (match) {
-    const shortId = match.id.includes('/') ? (match.id.split('/').pop() ?? '') : match.id;
-    return shortId || match.label;
-  }
-  const fallback = modelId.includes('/') ? (modelId.split('/').pop() ?? '') : modelId;
-  return fallback;
-};
-
 /** @returns {Array<import('electron').MenuItemConstructorOptions>} */
 const buildAgentSubmenu = () =>
-  listAgents().map((agent) => {
-    const isActive = config.settings.agentBackend === agent.id;
-    const modelName = isActive ? getActiveModelShortName(agent) : '';
-    return {
-      checked: isActive,
-      click: () => selectAgentBackend(agent.id),
-      label: modelName ? `${agent.label} (${modelName})` : agent.label,
-      type: 'radio',
-    };
-  });
+  listAgents().map((agent) => ({
+    checked: config.settings.agentBackend === agent.id,
+    click: () => selectAgentBackend(agent.id),
+    label: agent.label,
+    type: 'radio',
+  }));
 
 /** @returns {Array<import('electron').MenuItemConstructorOptions>} */
 const buildModelSubmenu = () => {
   const agent = getActiveAgent();
+  refreshAgentModels(agent);
   return agent.models.map((model) => ({
     checked: config.settings[agent.modelSettingKey] === model.id,
     click: () => selectAgentModel(agent, model.id),

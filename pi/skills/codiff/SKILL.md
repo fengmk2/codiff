@@ -17,7 +17,7 @@ This skill is just the handoff: fetch the guide, author the document, open Codif
 ## Workflow
 
 1. **Get the current guidance from Codiff.** It explains the data model, how to think about
-   the document, and prints the JSON schema; scripts are in `~/.pi/agent/skills/codiff/scripts` folder:
+   the document, and prints the JSON schema:
 
    ```bash
    node scripts/open-codiff.mjs --guide
@@ -34,30 +34,23 @@ This skill is just the handoff: fetch the guide, author the document, open Codif
    system temp directory — e.g. `/tmp/codiff-walkthrough-<id>.json` (use `$TMPDIR` on macOS).
    Remember that path for the next step.
 
-4. **Open Codiff** with that file _from the git project folder_:
+4. **Open Codiff** with that file:
 
    ```bash
    node scripts/open-codiff.mjs --file /tmp/codiff-walkthrough-<id>.json
    ```
 
-   Forward an explicit target after the flag if the user gave one _from the git project folder_:
+   Forward an explicit target after the flag if the user gave one:
 
    ```bash
    node scripts/open-codiff.mjs --file /tmp/codiff-walkthrough-<id>.json HEAD
    node scripts/open-codiff.mjs --file /tmp/codiff-walkthrough-<id>.json /path/to/repository
    ```
 
-   The launcher passes `PI_SESSION_ID` to Codiff with `--agent pi` so follow-up questions
-   reuse this conversation. Codiff validates and repairs the document against the live diff,
-   so anchors that drift are pinned to a real section rather than dropped.
+   The launcher passes the Pi session id to Codiff with `--agent pi` when it can resolve
+   one, so follow-up questions reuse this conversation. Codiff validates and repairs the
+   document against the live diff, so anchors that drift are pinned to a real section
+   rather than dropped.
 
-Note:
-
-- Emit JSON only into the file.
-- Do not summarize the conversation back to the user.
-- The skill is a handoff into Codiff, no output is expected.
-- hunkIds: a valid hunk id looks like this:
-  (for unstaged): "src/App.tsx:unstaged:h1"
-  (for staged): "src/App.tsx:staged:h1"
-- use exactly `staged` or `unstaged` as any other will not work.
-  - temporary files, when you write in tmp folder expansion don't work, so I suggest saving a tmpfile like this instead: `TMPFILE="/tmp/codiff-walkthrough-$$-$(date +%s).json"; echo "$TMPFILE"`.
+Emit JSON only into the file. Do not summarize the conversation back to the user; the skill
+is a handoff into Codiff.

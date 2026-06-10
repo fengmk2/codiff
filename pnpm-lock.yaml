@@ -18,13 +18,13 @@ importers:
 
   .:
     dependencies:
+      '@earendil-works/pi-coding-agent':
+        specifier: ^0.78.1
+        version: 0.78.1(ws@8.21.0)(zod@4.4.3)
       electron-squirrel-startup:
         specifier: ^1.0.1
         version: 1.0.1
     devDependencies:
-      '@earendil-works/pi-coding-agent':
-        specifier: ^0.78.1
-        version: 0.78.1(ws@8.21.0)(zod@4.4.3)
       '@electron-forge/cli':
         specifier: ^7.11.2
         version: 7.11.2(@swc/core@1.15.40)(encoding@0.1.13)

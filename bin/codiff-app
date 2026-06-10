@@ -41,7 +41,7 @@ show_help() {
   printf '  %-22s%s%s%s\n' "--version, -v" "$gray" "Show version number and exit." "$reset"
   printf '  %-22s%s%s%s\n' "--walkthrough, -w" "$gray" "Start with an LLM-generated narrative walkthrough." "$reset"
   printf '  %-22s%s%s%s\n' "--walkthrough-context <file>" "$gray" "Seed a walkthrough with Codex conversation context JSON." "$reset"
-
+  printf '  %-22s%s%s%s\n' "--walkthrough-file <file>" "$gray" "Open a pre-authored narrative walkthrough JSON file." "$reset"
   printf '  %-22s%s%s%s\n' "--walkthrough-guide" "$gray" "Print the narrative walkthrough authoring guide and schema, then exit." "$reset"
   printf '\n'
   printf '%s\n' "${blue_bold}Examples:${reset}"

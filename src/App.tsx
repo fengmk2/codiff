@@ -37,7 +37,6 @@ import {
   defaultLaunchOptions,
   defaultTerminalHelperStatus,
   getAgentLabel,
-  getAgentModelShortName,
   HISTORY_PAGE_SIZE,
 } from './lib/app-constants.ts';
 import {
@@ -2031,15 +2030,6 @@ export default function App() {
 
   const activeAgentBackend = launchOptions.agentBackend ?? codiffConfig.settings.agentBackend;
   const agentLabel = getAgentLabel(activeAgentBackend);
-  const agentModelLabel = getAgentModelShortName(
-    activeAgentBackend,
-    activeAgentBackend === 'codex'
-      ? codiffConfig.settings.openAIModel
-      : activeAgentBackend === 'claude'
-        ? codiffConfig.settings.claudeModel
-        : codiffConfig.settings.piModel,
-  );
-  const agentLabelWithModel = agentModelLabel ? `${agentLabel} (${agentModelLabel})` : agentLabel;
   const agentSkillLabel = `${agentLabel} Skill`;
 
   if (loadError) {
@@ -2088,7 +2078,9 @@ export default function App() {
     sidebarMode === 'walkthrough' &&
     !narrativeWalkthrough &&
     !walkthroughLoading &&
-    (walkthroughError?.code === 'CODEX_NOT_FOUND' || walkthroughError?.code === 'CLAUDE_NOT_FOUND');
+    (walkthroughError?.code === 'CODEX_NOT_FOUND' ||
+      walkthroughError?.code === 'CLAUDE_NOT_FOUND' ||
+      walkthroughError?.code === 'PI_NOT_FOUND');
 
   const sidebarLabel = `${compactPath(state.root)}${state.branch ? ` (${state.branch})` : ''}`;
   const sidebarSourceLabel =
@@ -2109,7 +2101,7 @@ export default function App() {
   const commonReviewProps = {
     activeSearchMatch: activeDiffSearchMatch,
     agentId: activeAgentBackend,
-    agentLabel: agentLabelWithModel,
+    agentLabel,
     collapsed,
     comments: visibleReviewComments,
     commitMetadata: state.source.type === 'commit' ? (state.commitMetadata ?? null) : null,
@@ -2335,9 +2327,12 @@ export default function App() {
           <div className="empty-state">
             <div className="empty-panel squircle">
               <AgentUnavailablePanel
-                agentLabel={agentLabelWithModel}
+                agentLabel={agentLabel}
                 onShowFiles={() => setSidebarMode('tree')}
                 reason={walkthroughError?.reason}
+                title={
+                  walkthroughError?.code === 'PI_NOT_FOUND' ? 'Pi support not found' : undefined
+                }
               />
             </div>
           </div>

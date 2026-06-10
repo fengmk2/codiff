@@ -70,6 +70,9 @@ test('electron defaults load from packaged app shape', () => {
   expect(packageRequire('./config.cjs').createDefaultConfig()).toEqual(createDefaultConfig());
 });
 
-test('npm package includes shared config defaults', () => {
+test('npm package includes runtime config and bundled skills', () => {
   expect(packageJson.files).toContain('config');
+  expect(packageJson.files).toContain('codex');
+  expect(packageJson.files).toContain('claude');
+  expect(packageJson.files).toContain('pi');
 });

@@ -1321,7 +1321,6 @@ test('walkthrough launch errors stay on the walkthrough tab without automatic re
     container.remove();
   }
 });
-
 test('history filter matches commits by author name', async () => {
   window.codiff = createCodiffMock({
     getRepositoryHistory: vi.fn(async () => ({
@@ -1389,6 +1388,48 @@ test('history filter matches commits by author name', async () => {
       expect(historySubjects()).toContain('Update docs');
       expect(historySubjects()).not.toContain('Fix parser');
     });
+  } finally {
+    if (root) {
+      await act(async () => root?.unmount());
+    }
+    container.remove();
+  }
+});
+
+test('Pi not-found walkthrough errors show the agent recovery panel', async () => {
+  window.codiff = createCodiffMock({
+    getLaunchOptions: vi.fn(async () => ({
+      agentBackend: 'pi' as const,
+      repositoryPathProvided: true,
+      walkthrough: true,
+    })),
+    getNarrativeWalkthrough: vi.fn(async () => ({
+      code: 'PI_NOT_FOUND' as const,
+      reason: 'Pi support could not be loaded.',
+      status: 'unavailable' as const,
+    })),
+    getRepositoryState: vi.fn(async () => ({
+      ...repositoryState,
+      files: [createChangedFile('src/app.ts')],
+    })),
+  });
+
+  const container = document.createElement('div');
+  document.body.append(container);
+  let root: Root | null = null;
+
+  try {
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+    });
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('Pi support not found');
+    });
+
+    expect(container.textContent).toContain('Pi support could not be loaded.');
+    expect(container.textContent).toContain('Review Files');
   } finally {
     if (root) {
       await act(async () => root?.unmount());

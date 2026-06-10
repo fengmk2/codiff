@@ -2,7 +2,7 @@
 
 const IMPORTANCES = new Set(['critical', 'normal', 'context']);
 const ICONS = new Set(['bug', 'wrench', 'path', 'flask', 'beaker', 'doc', 'gear']);
-const AGENTS = new Set(['codex', 'claude']);
+const AGENTS = new Set(['codex', 'claude', 'pi']);
 const CHANGE_TYPES = new Set([
   'fix',
   'feature',

@@ -60,7 +60,7 @@ test('resolves the Claude Code agent with its session and skill wiring', () => {
   });
 });
 
-test('resolves the Pi agent with its session wiring but no skill', () => {
+test('resolves the Pi agent with its session and skill wiring', () => {
   const agent = getAgent('pi');
   expect(agent.id).toBe('pi');
   expect(agent.label).toBe('Pi');
@@ -68,14 +68,14 @@ test('resolves the Pi agent with its session wiring but no skill', () => {
   expect(agent.sessionLaunchOptionKey).toBe('piSessionId');
   expect(agent.notFoundCode).toBe('PI_NOT_FOUND');
   expect(agent.skill).toEqual({
-  "label": "Pi Skill",
-  "targets": [
-    {
-      "sourceSubdir": "pi/skills/codiff",
-      "targetSubdir": ".pi/agent/skills/codiff",
-    },
-  ],
-});
+    label: 'Pi Skill',
+    targets: [
+      {
+        sourceSubdir: 'pi/skills/codiff',
+        targetSubdir: '.pi/agent/skills/codiff',
+      },
+    ],
+  });
   expect(typeof agent.run).toBe('function');
   expect(typeof agent.readSessionContext).toBe('function');
 });

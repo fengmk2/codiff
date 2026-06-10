@@ -9,13 +9,15 @@ const MAX_SESSION_SCAN_FILES = 20_000;
 const MAX_SESSION_MESSAGE_CHARS = 2_400;
 const MAX_SESSION_MESSAGES = 18;
 const MAX_SESSION_CONTEXT_CHARS = 28_000;
+const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
  * @typedef {import('../src/types.ts').WalkthroughContext} WalkthroughContext
  */
 
 /** @param {unknown} value */
-const normalizePiSessionId = (value) => (typeof value === 'string' ? value : '');
+const normalizePiSessionId = (value) =>
+  typeof value === 'string' && SESSION_ID_PATTERN.test(value) ? value : '';
 
 const getPiHome = () => process.env.PI_HOME || join(homedir(), '.pi');
 
@@ -122,7 +124,10 @@ const extractMessage = (input) => {
     return null;
   }
 
-  if (!('type' in input) || (input.type !== 'user' && input.type !== 'assistant')) {
+  if (
+    !('type' in input) ||
+    (input.type !== 'message' && input.type !== 'user' && input.type !== 'assistant')
+  ) {
     return null;
   }
 

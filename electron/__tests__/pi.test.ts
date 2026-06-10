@@ -5,11 +5,9 @@ const require = createRequire(import.meta.url);
 const piModule = require('../pi.cjs') as {
   DEFAULT_PI_MODEL: string;
   FALLBACK_PI_MODEL: string;
-  PI_MODELS: ReadonlyArray<{ id: string; label: string }>;
   PI_NOT_FOUND_CODE: string;
   PI_NOT_FOUND_MESSAGE: string;
   getCachedPiModels: () => ReadonlyArray<{ id: string; label: string }>;
-  getPiCommand: () => string;
   getPiModels: () => Promise<ReadonlyArray<{ id: string; label: string }>>;
   isPiInstalled: () => Promise<boolean>;
   isPiNotFoundError: (error: unknown) => boolean;
@@ -26,11 +24,9 @@ const piModule = require('../pi.cjs') as {
 const {
   DEFAULT_PI_MODEL,
   FALLBACK_PI_MODEL,
-  PI_MODELS,
   PI_NOT_FOUND_CODE,
   PI_NOT_FOUND_MESSAGE,
   getCachedPiModels,
-  getPiCommand,
   isPiInstalled,
   isPiNotFoundError,
   normalizePiModel,
@@ -40,44 +36,19 @@ test('exposes the Pi default model identifier', () => {
   expect(DEFAULT_PI_MODEL).toBe('pi-default');
   expect(FALLBACK_PI_MODEL).toBe('pi-default');
   expect(PI_NOT_FOUND_CODE).toBe('PI_NOT_FOUND');
-  expect(typeof PI_NOT_FOUND_MESSAGE).toBe('string');
+  expect(PI_NOT_FOUND_MESSAGE).toContain('Pi support could not be loaded');
 });
 
-test('PI_MODELS proxy reflects the cached model list', () => {
-  const cached = getCachedPiModels();
-  expect(PI_MODELS.length).toBe(cached.length);
-  for (let i = 0; i < cached.length; i += 1) {
-    expect(PI_MODELS[i]).toEqual(cached[i]);
-  }
-  expect([...PI_MODELS]).toEqual([...cached]);
+test('exposes the cached model list', () => {
+  expect(getCachedPiModels()).toEqual([{ id: DEFAULT_PI_MODEL, label: 'Pi default' }]);
 });
 
 test('detects Pi-not-found errors by code', () => {
   expect(isPiNotFoundError({ code: PI_NOT_FOUND_CODE })).toBe(true);
-  expect(isPiNotFoundError({ code: 'MODULE_NOT_FOUND' })).toBe(true);
-  expect(isPiNotFoundError({ code: 'ENOENT' })).toBe(true);
+  expect(isPiNotFoundError({ code: 'MODULE_NOT_FOUND' })).toBe(false);
+  expect(isPiNotFoundError({ code: 'ENOENT' })).toBe(false);
   expect(isPiNotFoundError(new Error('other'))).toBe(false);
   expect(isPiNotFoundError(null)).toBe(false);
-});
-
-test('rejects invalid explicit Pi CLI overrides', () => {
-  const previous = process.env.CODIFF_PI_PATH;
-  process.env.CODIFF_PI_PATH = '/tmp/codiff-missing-pi';
-
-  try {
-    expect(() => getPiCommand()).toThrow('CODIFF_PI_PATH');
-    try {
-      getPiCommand();
-    } catch (error) {
-      expect(error).toMatchObject({ code: PI_NOT_FOUND_CODE });
-    }
-  } finally {
-    if (previous == null) {
-      delete process.env.CODIFF_PI_PATH;
-    } else {
-      process.env.CODIFF_PI_PATH = previous;
-    }
-  }
 });
 
 // Everything below depends on the Pi SDK being installed. The `isPiInstalled`

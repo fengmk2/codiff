@@ -87,3 +87,10 @@ test('normalizes review assistant markdown without flattening it', () => {
     version: 1,
   });
 });
+
+test('normalizes malformed review assistant replies without exposing raw payloads', () => {
+  expect(normalizeReviewAssistantReply({ text: 'raw model text', version: 1 }, 'Pi')).toEqual({
+    reply: 'Pi could not produce a useful reply.',
+    version: 1,
+  });
+});

@@ -162,14 +162,16 @@ export function AgentUnavailablePanel({
   agentLabel,
   onShowFiles,
   reason,
+  title,
 }: {
   agentLabel: string;
   onShowFiles: () => void;
   reason?: string;
+  title?: string;
 }) {
   return (
     <>
-      <strong>{agentLabel} CLI not found</strong>
+      <strong>{title ?? `${agentLabel} CLI not found`}</strong>
       <p>
         {reason ??
           `Install ${agentLabel} and verify its CLI works in Terminal, then try the walkthrough again.`}

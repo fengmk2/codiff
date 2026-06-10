@@ -93,35 +93,26 @@ const createClaudeAgent = () => ({
 });
 
 /** @returns {Agent} */
-const createPiAgent = () => {
-  // Kick off model discovery eagerly so the agent menu can populate the
-  // model submenu with the real Pi models as soon as the SDK has loaded.
-  // The result is cached on the `pi` module and exposed via the proxy on
-  // `pi.PI_MODELS`. Failures are intentionally swallowed — the lazy
-  // `getPiModels()` call inside `runPi` will surface a clear error then.
-  pi.getPiModels().catch(() => {});
-
-  return {
-    id: 'pi',
-    label: 'Pi',
-    cliName: 'pi',
-    cliPathEnvVar: 'CODIFF_PI_PATH',
-    models: pi.PI_MODELS,
-    defaultModel: pi.DEFAULT_PI_MODEL,
-    fallbackModel: pi.FALLBACK_PI_MODEL,
-    modelSettingKey: 'piModel',
-    normalizeModel: pi.normalizePiModel,
-    notFoundCode: pi.PI_NOT_FOUND_CODE,
-    isNotFoundError: pi.isPiNotFoundError,
-    run: pi.runPi,
-    readSessionContext: readPiSessionContext,
-    sessionLaunchOptionKey: 'piSessionId',
-    skill: {
-      label: 'Pi Skill',
-      targets: [{ sourceSubdir: 'pi/skills/codiff', targetSubdir: '.pi/agent/skills/codiff' }],
-    },
-  };
-};
+const createPiAgent = () => ({
+  id: 'pi',
+  label: 'Pi',
+  cliName: 'pi',
+  cliPathEnvVar: 'CODIFF_PI_PATH',
+  models: pi.getCachedPiModels(),
+  defaultModel: pi.DEFAULT_PI_MODEL,
+  fallbackModel: pi.FALLBACK_PI_MODEL,
+  modelSettingKey: 'piModel',
+  normalizeModel: pi.normalizePiModel,
+  notFoundCode: pi.PI_NOT_FOUND_CODE,
+  isNotFoundError: pi.isPiNotFoundError,
+  run: pi.runPi,
+  readSessionContext: readPiSessionContext,
+  sessionLaunchOptionKey: 'piSessionId',
+  skill: {
+    label: 'Pi Skill',
+    targets: [{ sourceSubdir: 'pi/skills/codiff', targetSubdir: '.pi/agent/skills/codiff' }],
+  },
+});
 
 /** @type {Record<'codex' | 'claude' | 'pi', () => Agent>} */
 const AGENT_FACTORIES = {

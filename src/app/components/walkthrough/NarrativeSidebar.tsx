@@ -1,3 +1,4 @@
+import { getAgentLabel } from '../../../lib/app-constants.ts';
 import { renderInlineMarkdown } from '../../../lib/markdown.tsx';
 import {
   buildCommitModel,
@@ -13,8 +14,7 @@ import { Check, GitBranch, Path } from './icons.tsx';
 import { ChapterIcon } from './parts.tsx';
 import type { NarrativeNavigation } from './useNarrativeNavigation.ts';
 
-const agentLabel = (agentId: 'codex' | 'claude') =>
-  agentId === 'claude' ? 'Claude Code' : 'Codex';
+const agentLabel = (agentId: NarrativeWalkthrough['agent']) => getAgentLabel(agentId);
 
 function TocFileRows({
   files,

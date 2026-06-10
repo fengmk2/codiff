@@ -366,6 +366,15 @@ test('normalizes a well-formed narrative walkthrough', () => {
   expect(result.chapters[0].stops[1].hunks[0].anchor.startLine).toBe(1);
 });
 
+test('preserves Pi as the narrative walkthrough agent', () => {
+  const result = normalizeNarrativeWalkthrough(baseInput(), files, {
+    agent: 'pi',
+    source: { type: 'working-tree' },
+  });
+
+  expect(result.agent).toBe('pi');
+});
+
 test('normalizes walkthroughs made only of synthetic hunks', () => {
   const syntheticFiles = [
     {
