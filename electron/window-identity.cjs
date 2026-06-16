@@ -5,8 +5,8 @@ const { realpathSync } = require('node:fs');
 const { resolve } = require('node:path');
 
 /**
- * @typedef {import('../src/types.ts').ReviewSource} ReviewSource
- * @typedef {import('../src/types.ts').CodiffLaunchOptions} CodiffLaunchOptions
+ * @typedef {import('../core/types.ts').ReviewSource} ReviewSource
+ * @typedef {import('../core/types.ts').CodiffLaunchOptions} CodiffLaunchOptions
  * @typedef {{key: string; repositoryRoot: string; sourceKey: string}} WindowIdentity
  * @typedef {{number: number; owner: string; repo: string}} ParsedPullRequest
  */

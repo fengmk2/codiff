@@ -94,7 +94,7 @@ counts; when it is `false`, Codiff hides those changes from the working-tree rev
 
 ```jsonc
 {
-  "$schema": "https://raw.githubusercontent.com/nkzw-tech/codiff/main/src/config/codiff-config.schema.json",
+  "$schema": "https://raw.githubusercontent.com/nkzw-tech/codiff/main/core/config/codiff-config.schema.json",
   "settings": {
     "agentBackend": "codex",
     "claudeModel": "claude-sonnet-4-6",

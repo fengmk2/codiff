@@ -10,7 +10,7 @@ import {
   type WalkthroughStopView,
 } from '../../../lib/narrative-walkthrough.ts';
 import type { ChangedFile, NarrativeWalkthrough } from '../../../types.ts';
-import { Check, GitBranch, Path } from './icons.tsx';
+import { Check, GitBranch, Path, ShareNetwork } from './icons.tsx';
 import { ChapterIcon } from './parts.tsx';
 import type { NarrativeNavigation } from './useNarrativeNavigation.ts';
 
@@ -148,13 +148,19 @@ function SupportingFilesStop({
 }
 
 export function NarrativeSidebar({
+  allowCommit = true,
   files,
   navigation,
+  onShareWalkthrough,
+  shareWalkthroughDisabled = false,
   showWhitespace,
   walkthrough,
 }: {
+  allowCommit?: boolean;
   files: ReadonlyArray<ChangedFile>;
   navigation: NarrativeNavigation;
+  onShareWalkthrough?: () => void;
+  shareWalkthroughDisabled?: boolean;
   showWhitespace: boolean;
   walkthrough: NarrativeWalkthrough;
 }) {
@@ -166,7 +172,7 @@ export function NarrativeSidebar({
   const currentStopId =
     navigation.mode === 'stop' ? walkthroughView.sequence[navigation.index]?.id : null;
 
-  const committable = isWalkthroughCommittable(walkthrough);
+  const committable = allowCommit && isWalkthroughCommittable(walkthrough);
   const commitModel = committable ? buildCommitModel(walkthroughView, files) : null;
   const commitFiles = commitModel
     ? formatWalkthroughFileLineRows(
@@ -217,23 +223,69 @@ export function NarrativeSidebar({
               </span>
               <span className="wt-toc-chapter-title">Commit</span>
             </div>
-            <button
-              className={`wt-toc-stop${navigation.mode === 'commit' ? ' current' : ''}`}
-              onClick={navigation.enterCommit}
-              type="button"
+            <div
+              className={`wt-toc-stop wt-toc-stop-actions${
+                navigation.mode === 'commit' ? ' current' : ''
+              }`}
             >
               <span className="wt-toc-rail wt-toc-rail-commit">
                 <span className={`wt-toc-node${navigation.mode === 'commit' ? ' current' : ''}`}>
                   {navigation.mode === 'commit' ? <span className="wt-toc-node-pulse" /> : null}
                 </span>
               </span>
-              <span className="wt-toc-main">
-                <span className="wt-toc-title-row">
-                  <span className="wt-toc-title">Write the commit</span>
-                </span>
-                <TocFileRows files={commitFiles} />
+              <span className="wt-toc-main wt-toc-main-actions">
+                <button
+                  className="wt-toc-commit-action"
+                  onClick={navigation.enterCommit}
+                  type="button"
+                >
+                  <span className="wt-toc-title-row">
+                    <span className="wt-toc-title">Write the commit</span>
+                  </span>
+                  <TocFileRows files={commitFiles} />
+                </button>
+                {onShareWalkthrough ? (
+                  <button
+                    aria-label={
+                      shareWalkthroughDisabled ? 'Sharing walkthrough' : 'Share walkthrough'
+                    }
+                    className="wt-toc-share-action"
+                    disabled={shareWalkthroughDisabled}
+                    onClick={onShareWalkthrough}
+                    title={shareWalkthroughDisabled ? 'Sharing walkthrough' : 'Share walkthrough'}
+                    type="button"
+                  >
+                    <ShareNetwork aria-hidden size={15} />
+                  </button>
+                ) : null}
               </span>
-            </button>
+            </div>
+          </div>
+        ) : onShareWalkthrough ? (
+          <div className="wt-toc-chapter">
+            <div className="wt-toc-chapter-head">
+              <span className="wt-toc-chapter-icon commit">
+                <ShareNetwork size={15} />
+              </span>
+              <span className="wt-toc-chapter-title">Share</span>
+            </div>
+            <div className="wt-toc-stop wt-toc-stop-actions">
+              <span className="wt-toc-rail wt-toc-rail-commit">
+                <span className="wt-toc-node" />
+              </span>
+              <span className="wt-toc-main wt-toc-main-actions">
+                <button
+                  className="wt-toc-commit-action"
+                  disabled={shareWalkthroughDisabled}
+                  onClick={onShareWalkthrough}
+                  type="button"
+                >
+                  <span className="wt-toc-title-row">
+                    <span className="wt-toc-title">Share walkthrough</span>
+                  </span>
+                </button>
+              </span>
+            </div>
           </div>
         ) : null}
       </div>

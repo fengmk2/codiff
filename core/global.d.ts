@@ -1,8 +1,9 @@
 import type { CodiffConfig } from './config/types.ts';
 import type {
   AgentSkillStatus,
-  CodiffPreferences,
+  CodiffFeatureFlags,
   CodiffLaunchOptions,
+  CodiffPreferences,
   DiffImageContentRequest,
   DiffImageContentResult,
   DiffSection,
@@ -14,6 +15,8 @@ import type {
   ReviewAssistantRequest,
   ReviewAssistantResult,
   ReviewSource,
+  SharedWalkthroughSnapshot,
+  ShareWalkthroughResult,
   SubmitPullRequestCommentRequest,
   PullRequestExistingReviewComment,
   SubmitPullRequestReviewRequest,
@@ -23,6 +26,8 @@ import type {
   WalkthroughCommitRequest,
   WalkthroughCommitResult,
 } from './types.ts';
+
+declare module '*.css';
 
 declare global {
   interface Window {
@@ -36,6 +41,7 @@ declare global {
       getConfig: () => Promise<CodiffConfig>;
       getDiffImageContent: (request: DiffImageContentRequest) => Promise<DiffImageContentResult>;
       getDiffSectionContent: (request: DiffSectionContentRequest) => Promise<DiffSection>;
+      getFeatureFlags: () => Promise<CodiffFeatureFlags>;
       getGitIdentity: () => Promise<GitIdentity>;
       getLaunchOptions: () => Promise<CodiffLaunchOptions>;
       getNarrativeWalkthrough: (source?: ReviewSource) => Promise<NarrativeWalkthroughResult>;
@@ -58,6 +64,7 @@ declare global {
       setDiffStyle: (value: CodiffPreferences['diffStyle']) => Promise<void>;
       setShowOutdated: (value: boolean) => Promise<void>;
       setWordWrap: (value: boolean) => Promise<void>;
+      shareWalkthrough: (snapshot: SharedWalkthroughSnapshot) => Promise<ShareWalkthroughResult>;
       showInFolder: (path: string) => Promise<void>;
       submitPullRequestComment: (
         request: SubmitPullRequestCommentRequest,

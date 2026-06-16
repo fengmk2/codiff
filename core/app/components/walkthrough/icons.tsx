@@ -12,6 +12,7 @@ import { GearIcon as Gear } from '@phosphor-icons/react/Gear';
 import { GitBranchIcon as GitBranch } from '@phosphor-icons/react/GitBranch';
 import { PathIcon as Path } from '@phosphor-icons/react/Path';
 import { ReadCvLogoIcon as Doc } from '@phosphor-icons/react/ReadCvLogo';
+import { ShareNetworkIcon as ShareNetwork } from '@phosphor-icons/react/ShareNetwork';
 import { WrenchIcon as Wrench } from '@phosphor-icons/react/Wrench';
 import type { ComponentType } from 'react';
 import type { WalkthroughIcon } from '../../../types.ts';
@@ -43,4 +44,5 @@ export {
   FilePlus,
   GitBranch,
   Path,
+  ShareNetwork,
 };

@@ -33,12 +33,12 @@ const {
 } = require('../shared/narrative-walkthrough-diff.cjs');
 
 /**
- * @typedef {import('../src/types.ts').ChangedFile} ChangedFile
- * @typedef {import('../src/types.ts').DiffSection} DiffSection
- * @typedef {import('../src/types.ts').NarrativeWalkthrough} NarrativeWalkthrough
- * @typedef {import('../src/types.ts').NarrativeWalkthroughResult} NarrativeWalkthroughResult
- * @typedef {import('../src/types.ts').RepositoryState} RepositoryState
- * @typedef {import('../src/types.ts').WalkthroughContext} WalkthroughContext
+ * @typedef {import('../core/types.ts').ChangedFile} ChangedFile
+ * @typedef {import('../core/types.ts').DiffSection} DiffSection
+ * @typedef {import('../core/types.ts').NarrativeWalkthrough} NarrativeWalkthrough
+ * @typedef {import('../core/types.ts').NarrativeWalkthroughResult} NarrativeWalkthroughResult
+ * @typedef {import('../core/types.ts').RepositoryState} RepositoryState
+ * @typedef {import('../core/types.ts').WalkthroughContext} WalkthroughContext
  * @typedef {import('./agent.cjs').Agent} Agent
  * @typedef {import('./agent.cjs').AgentOptions} AgentOptions
  */

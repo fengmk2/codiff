@@ -19,7 +19,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const DEV_SERVER_URL = process.env.CODIFF_DEV_SERVER_URL || 'http://127.0.0.1:5173';
 
 const looksLikeCodiff = (body) =>
-  body.includes('<title>Codiff</title>') && body.includes('/src/index.tsx');
+  body.includes('<title>Codiff</title>') && body.includes('/core/index.tsx');
 
 /** Resolve to the dev-server URL when it is up and serving Codiff, else `null`. */
 const detectDevServer = (url) =>

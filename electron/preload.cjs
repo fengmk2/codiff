@@ -13,6 +13,7 @@ const codiff = {
   getConfig: () => ipcRenderer.invoke('codiff:getConfig'),
   decreaseCodeFontSize: () => ipcRenderer.invoke('codiff:decreaseCodeFontSize'),
   getDiffSectionContent: (request) => ipcRenderer.invoke('codiff:getDiffSectionContent', request),
+  getFeatureFlags: () => ipcRenderer.invoke('codiff:getFeatureFlags'),
   getDiffImageContent: (request) => ipcRenderer.invoke('codiff:getDiffImageContent', request),
   getGitIdentity: () => ipcRenderer.invoke('codiff:getGitIdentity'),
   getLaunchOptions: () => ipcRenderer.invoke('codiff:getLaunchOptions'),
@@ -27,7 +28,7 @@ const codiff = {
   increaseCodeFontSize: () => ipcRenderer.invoke('codiff:increaseCodeFontSize'),
   isWindowFullScreen: () => ipcRenderer.invoke('codiff:isWindowFullScreen'),
   onConfigChanged: (callback) => {
-    /** @param {Electron.IpcRendererEvent} _event @param {import('../src/config/types.ts').CodiffConfig} nextConfig */
+    /** @param {Electron.IpcRendererEvent} _event @param {import('../core/config/types.ts').CodiffConfig} nextConfig */
     const listener = (_event, nextConfig) => callback(nextConfig);
     ipcRenderer.on('codiff:configChanged', listener);
     return () => ipcRenderer.removeListener('codiff:configChanged', listener);
@@ -73,6 +74,7 @@ const codiff = {
   setDiffStyle: (value) => ipcRenderer.invoke('codiff:setDiffStyle', value),
   setShowOutdated: (value) => ipcRenderer.invoke('codiff:setShowOutdated', value),
   setWordWrap: (value) => ipcRenderer.invoke('codiff:setWordWrap', value),
+  shareWalkthrough: (snapshot) => ipcRenderer.invoke('codiff:shareWalkthrough', snapshot),
   resetCodeFontSize: () => ipcRenderer.invoke('codiff:resetCodeFontSize'),
   showInFolder: (path) => ipcRenderer.invoke('codiff:showInFolder', path),
   submitPullRequestComment: (request) =>

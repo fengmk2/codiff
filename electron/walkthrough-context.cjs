@@ -11,7 +11,7 @@ const MAX_MESSAGE_ITEMS = 18;
 const MAX_MESSAGE_TEXT_CHARS = 2_400;
 
 /**
- * @typedef {import('../src/types.ts').WalkthroughContext} WalkthroughContext
+ * @typedef {import('../core/types.ts').WalkthroughContext} WalkthroughContext
  */
 
 /** @param {unknown} value @param {number} [maxLength] */

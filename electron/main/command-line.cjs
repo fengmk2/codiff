@@ -7,7 +7,7 @@ const { parseArgs } = require('node:util');
 const { readWalkthroughContext } = require('../walkthrough-context.cjs');
 
 /**
- * @typedef {import('../../src/types.ts').CodiffLaunchOptions} CodiffLaunchOptions
+ * @typedef {import('../../core/types.ts').CodiffLaunchOptions} CodiffLaunchOptions
  * @typedef {{direction: string; name: string; owner: string; repo: string}} GitHubRemote
  * @typedef {{launchOptions: CodiffLaunchOptions; pullRequestNumber: number | null; repositoryPath: string | null}} ParsedCommandLineArguments
  */

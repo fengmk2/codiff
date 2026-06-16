@@ -6,9 +6,9 @@ const MAX_PATCH_CHARS = 24_000;
 const MAX_OTHER_FILES = 40;
 
 /**
- * @typedef {import('../src/types.ts').ChangedFile} ChangedFile
- * @typedef {import('../src/types.ts').RepositoryState} RepositoryState
- * @typedef {import('../src/types.ts').ReviewAssistantRequest} ReviewAssistantRequest
+ * @typedef {import('../core/types.ts').ChangedFile} ChangedFile
+ * @typedef {import('../core/types.ts').RepositoryState} RepositoryState
+ * @typedef {import('../core/types.ts').ReviewAssistantRequest} ReviewAssistantRequest
  * @typedef {import('./agent.cjs').Agent} Agent
  * @typedef {import('./agent.cjs').AgentOptions} AgentOptions
  */

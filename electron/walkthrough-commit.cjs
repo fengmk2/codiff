@@ -8,8 +8,8 @@
 const { git, gitBufferWithInput, validateRepositoryPath } = require('./git-state/common.cjs');
 
 /**
- * @typedef {import('../src/types.ts').WalkthroughCommitRequest} WalkthroughCommitRequest
- * @typedef {import('../src/types.ts').WalkthroughCommitResult} WalkthroughCommitResult
+ * @typedef {import('../core/types.ts').WalkthroughCommitRequest} WalkthroughCommitRequest
+ * @typedef {import('../core/types.ts').WalkthroughCommitResult} WalkthroughCommitResult
  */
 
 /**

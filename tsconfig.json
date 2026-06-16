@@ -19,7 +19,7 @@
     "target": "es2017",
     "types": ["vite/client"]
   },
-  "exclude": ["dist", "node_modules", "out"],
+  "exclude": ["core/node_modules", "dist", "node_modules", "out"],
   "include": ["**/*.cjs", "**/*.ts", "**/*.tsx"],
   "ts-node": {
     "transpileOnly": true,

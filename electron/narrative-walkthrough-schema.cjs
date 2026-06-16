@@ -47,7 +47,7 @@ const hunkGroupProperties = {
   title: { type: 'string' },
 };
 
-// Keep in sync with src/walkthrough/narrative-walkthrough.schema.json;
+// Keep in sync with core/walkthrough/narrative-walkthrough.schema.json;
 // electron/__tests__/narrative-walkthrough.test.ts enforces equality.
 // Authoring agents constrain output to it; the renderer trusts only the
 // normalized result, not the raw schema-valid input.

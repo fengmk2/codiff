@@ -106,6 +106,9 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
   getDiffSectionContent: vi.fn(async () => {
     throw new Error('Unexpected diff section load.');
   }),
+  getFeatureFlags: vi.fn(async () => ({
+    walkthroughSharing: false,
+  })),
   getGitIdentity: vi.fn(async () => ({
     email: 'reviewer@example.com',
     name: 'Reviewer',
@@ -167,6 +170,10 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
   setDiffStyle: vi.fn(async () => {}),
   setShowOutdated: vi.fn(async () => {}),
   setWordWrap: vi.fn(async () => {}),
+  shareWalkthrough: vi.fn(async () => ({
+    status: 'uploaded' as const,
+    url: 'https://codiff.dev/w/test',
+  })),
   showInFolder: vi.fn(async () => {}),
   submitPullRequestComment: vi.fn(async () => {
     throw new Error('Unexpected pull request comment submit.');

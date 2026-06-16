@@ -18,7 +18,16 @@ import {
 import type { ChangedFile, NarrativeWalkthrough, WalkthroughHunkGroup } from '../../../types.ts';
 import type { ReviewDiffBlock } from '../ReviewCodeView.tsx';
 import { CommitView, type CommitHandler, type CommitMessageHandler } from './CommitView.tsx';
-import { ArrowLeft, ArrowRight, CaretLeft, CaretRight, Check, GitBranch, Path } from './icons.tsx';
+import {
+  ArrowLeft,
+  ArrowRight,
+  CaretLeft,
+  CaretRight,
+  Check,
+  GitBranch,
+  Path,
+  ShareNetwork,
+} from './icons.tsx';
 import { ChapterIcon, ImportancePill, Narration } from './parts.tsx';
 import type { NarrativeNavigation } from './useNarrativeNavigation.ts';
 
@@ -235,11 +244,15 @@ const createSupportBlocks = (
 function Arc({
   committable,
   navigation,
+  onShareWalkthrough,
+  shareWalkthroughDisabled = false,
   supportAvailable,
   walkthroughView,
 }: {
   committable: boolean;
   navigation: NarrativeNavigation;
+  onShareWalkthrough?: () => void;
+  shareWalkthroughDisabled?: boolean;
   supportAvailable: boolean;
   walkthroughView: WalkthroughView;
 }) {
@@ -406,22 +419,40 @@ function Arc({
             </div>
           </>
         ) : null}
-        {committable ? (
+        {committable || onShareWalkthrough ? (
           <>
             <span className="wt-arc-join dashed" />
             <div className="wt-arc-chapter">
               <span className="wt-arc-chapter-label">
-                <GitBranch size={13} />
-                Commit
+                {committable ? <GitBranch size={13} /> : <ShareNetwork size={13} />}
+                {committable && onShareWalkthrough ? 'Finish' : committable ? 'Commit' : 'Share'}
               </span>
-              <button
-                className={`wt-arc-node${navigation.mode === 'commit' ? ' current' : ''}`}
-                onClick={navigation.enterCommit}
-                title="Commit the staged change"
-                type="button"
-              >
-                <GitBranch size={13} />
-              </button>
+              <div className="wt-arc-nodes wt-arc-action-nodes">
+                {committable ? (
+                  <button
+                    className={`wt-arc-node${navigation.mode === 'commit' ? ' current' : ''}`}
+                    onClick={navigation.enterCommit}
+                    title="Commit the staged change"
+                    type="button"
+                  >
+                    <GitBranch size={13} />
+                  </button>
+                ) : null}
+                {onShareWalkthrough ? (
+                  <button
+                    aria-label={
+                      shareWalkthroughDisabled ? 'Sharing walkthrough' : 'Share walkthrough'
+                    }
+                    className="wt-arc-node wt-arc-share-node"
+                    disabled={shareWalkthroughDisabled}
+                    onClick={onShareWalkthrough}
+                    title={shareWalkthroughDisabled ? 'Sharing walkthrough' : 'Share walkthrough'}
+                    type="button"
+                  >
+                    <ShareNetwork aria-hidden size={13} />
+                  </button>
+                ) : null}
+              </div>
             </div>
           </>
         ) : null}
@@ -434,26 +465,32 @@ function Arc({
 }
 
 export function NarrativeWalkthroughView({
+  allowCommit = true,
   files,
   navigation,
   onActiveReviewTargetChange,
   onCommit,
+  onShareWalkthrough,
   onUpdateCommitMessage,
   renderDiffBlocks,
+  shareWalkthroughDisabled,
   showWhitespace,
   walkthrough,
 }: {
+  allowCommit?: boolean;
   files: ReadonlyArray<ChangedFile>;
   navigation: NarrativeNavigation;
   onActiveReviewTargetChange: (target: WalkthroughReviewTarget | null) => void;
   onCommit: CommitHandler;
+  onShareWalkthrough?: () => void;
   onUpdateCommitMessage: CommitMessageHandler;
   renderDiffBlocks: RenderWalkthroughDiffBlocks;
+  shareWalkthroughDisabled?: boolean;
   showWhitespace: boolean;
   walkthrough: NarrativeWalkthrough;
 }) {
   const { walkthroughView } = navigation;
-  const committable = isWalkthroughCommittable(walkthrough);
+  const committable = allowCommit && isWalkthroughCommittable(walkthrough);
   const walkthroughBlocks = useMemo(
     () =>
       walkthroughView
@@ -610,6 +647,8 @@ export function NarrativeWalkthroughView({
       <Arc
         committable={committable}
         navigation={navigation}
+        onShareWalkthrough={onShareWalkthrough}
+        shareWalkthroughDisabled={shareWalkthroughDisabled}
         supportAvailable={supportAvailable}
         walkthroughView={walkthroughView}
       />

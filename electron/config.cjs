@@ -12,17 +12,17 @@ const { homedir } = require('node:os');
 const { join } = require('node:path');
 
 /**
- * @typedef {import('../src/config/types.ts').CodiffConfig} CodiffConfig
- * @typedef {import('../src/config/types.ts').CodiffDiffStyle} CodiffDiffStyle
- * @typedef {import('../src/config/types.ts').CodiffTheme} CodiffTheme
- * @typedef {import('../src/types.ts').CodiffPreferences} CodiffPreferences
+ * @typedef {import('../core/config/types.ts').CodiffConfig} CodiffConfig
+ * @typedef {import('../core/config/types.ts').CodiffDiffStyle} CodiffDiffStyle
+ * @typedef {import('../core/config/types.ts').CodiffTheme} CodiffTheme
+ * @typedef {import('../core/types.ts').CodiffPreferences} CodiffPreferences
  */
 
 /** @type {CodiffConfig} */
 const defaultConfigTemplate = require('../config/defaults.json');
 
 const SCHEMA_URL =
-  'https://raw.githubusercontent.com/nkzw-tech/codiff/main/src/config/codiff-config.schema.json';
+  'https://raw.githubusercontent.com/nkzw-tech/codiff/main/core/config/codiff-config.schema.json';
 const CODE_FONT_SIZE_DEFAULT = 13;
 const CODE_FONT_SIZE_MAX = 32;
 const CODE_FONT_SIZE_MIN = 10;
@@ -139,8 +139,8 @@ const normalizeLastRepositoryPath = (path) =>
 /**
  * Accept a single combo string or a non-empty list of combo strings.
  * @param {unknown} binding
- * @param {import('../src/config/types.ts').KeyComboBinding} fallback
- * @returns {import('../src/config/types.ts').KeyComboBinding}
+ * @param {import('../core/config/types.ts').KeyComboBinding} fallback
+ * @returns {import('../core/config/types.ts').KeyComboBinding}
  */
 const normalizeKeyComboBinding = (binding, fallback) => {
   if (typeof binding === 'string') {

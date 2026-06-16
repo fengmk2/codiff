@@ -146,6 +146,39 @@ export type RepositoryState = {
   source: ReviewSource;
 };
 
+export type CodiffFeatureFlags = {
+  walkthroughSharing: boolean;
+};
+
+export type SharedWalkthroughSnapshot = {
+  branch: string | null;
+  codiffVersion: string;
+  exportedAt: string;
+  files: ReadonlyArray<ChangedFile>;
+  kind: 'codiff-walkthrough-share';
+  preferences: Pick<
+    CodiffPreferences,
+    'codeFontFamily' | 'codeFontSize' | 'diffStyle' | 'showWhitespace' | 'theme' | 'wordWrap'
+  >;
+  repository: {
+    root: string;
+    source: ReviewSource;
+  };
+  reviewComments?: ReadonlyArray<PullRequestExistingReviewComment>;
+  version: 1;
+  walkthrough: NarrativeWalkthrough;
+};
+
+export type ShareWalkthroughResult =
+  | {
+      status: 'uploaded';
+      url: string;
+    }
+  | {
+      reason: string;
+      status: 'failed';
+    };
+
 export type WalkthroughContext = {
   changedFiles?: ReadonlyArray<{
     path: string;

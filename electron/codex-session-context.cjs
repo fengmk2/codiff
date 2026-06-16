@@ -12,7 +12,7 @@ const MAX_SESSION_CONTEXT_CHARS = 28_000;
 const SESSION_ID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /**
- * @typedef {import('../src/types.ts').WalkthroughContext} WalkthroughContext
+ * @typedef {import('../core/types.ts').WalkthroughContext} WalkthroughContext
  */
 
 /** @param {unknown} value */

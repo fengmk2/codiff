@@ -160,6 +160,12 @@
   overflow: hidden;
 }
 
+.share-shell {
+  height: 100dvh;
+  min-height: 0;
+  width: 100vw;
+}
+
 .app-shell.sidebar-collapsed {
   grid-template-columns: minmax(0, 1fr);
   grid-template-rows: auto minmax(0, 1fr);
@@ -532,6 +538,10 @@
   padding-left: 0;
 }
 
+.share-shell .sidebar-path-row {
+  padding-left: 0;
+}
+
 .sidebar-path {
   color: var(--sidebar-text);
   flex: 1;
@@ -854,6 +864,7 @@
 }
 
 .review {
+  display: flex;
   min-height: 0;
   overflow: hidden;
   position: relative;
@@ -1939,7 +1950,7 @@
 .review-comment-body {
   background: var(--file-bg);
   border: 1px solid var(--file-border);
-  border-radius: 32px;
+  border-radius: 24px;
   corner-shape: squircle;
   inline-size: 100%;
   min-width: 0;

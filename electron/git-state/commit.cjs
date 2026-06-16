@@ -9,9 +9,9 @@ const {
 const { readCommitMetadataForCommit } = require('./commit-metadata.cjs');
 
 /**
- * @typedef {import('../../src/types.ts').DiffImageContentResult} DiffImageContentResult
- * @typedef {import('../../src/types.ts').RepositoryState} RepositoryState
- * @typedef {import('../../src/types.ts').ReviewSource} ReviewSource
+ * @typedef {import('../../core/types.ts').DiffImageContentResult} DiffImageContentResult
+ * @typedef {import('../../core/types.ts').RepositoryState} RepositoryState
+ * @typedef {import('../../core/types.ts').ReviewSource} ReviewSource
  * @typedef {import('./common.cjs').StatusItem} StatusItem
  * @typedef {Extract<ReviewSource, {type: 'branch'}>} BranchSource
  * @typedef {Extract<ReviewSource, {type: 'branch-diff'}>} BranchDiffSource

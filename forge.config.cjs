@@ -125,7 +125,7 @@ module.exports = {
       /^\/out(?:$|\/)/,
       /^\/pnpm-workspace\.yaml$/,
       /^\/public(?:$|\/)/,
-      /^\/src(?:$|\/)/,
+      /^\/core(?:$|\/)/,
       /^\/tsconfig/,
       /^\/vite\.config\./,
     ],

@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { expect, test } from 'vite-plus/test';
-import narrativeSchemaJson from '../../src/walkthrough/narrative-walkthrough.schema.json' with { type: 'json' };
+import narrativeSchemaJson from '../../core/walkthrough/narrative-walkthrough.schema.json' with { type: 'json' };
 
 const require = createRequire(import.meta.url);
 const {

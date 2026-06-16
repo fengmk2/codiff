@@ -74,6 +74,9 @@
   text-align: left;
   width: 100%;
 }
+.wt-toc-stop-actions {
+  cursor: default;
+}
 .wt-toc-rail {
   display: flex;
   justify-content: center;
@@ -133,6 +136,7 @@
 .wt-toc-main {
   border-radius: 24px;
   corner-shape: squircle;
+  margin: 4px;
   padding: 4px 8px;
 }
 .wt-toc-stop:hover .wt-toc-main {
@@ -195,6 +199,51 @@
 }
 .wt-toc-count .deleted {
   color: var(--diff-deletion);
+}
+.wt-toc-main-actions {
+  align-items: stretch;
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  padding: 4px;
+}
+.wt-toc-commit-action,
+.wt-toc-share-action {
+  background: transparent;
+  border: 0;
+  border-radius: 18px;
+  color: inherit;
+  corner-shape: squircle;
+  cursor: pointer;
+  min-width: 0;
+}
+.wt-toc-commit-action {
+  flex: 1;
+  padding: 0 4px;
+  text-align: left;
+}
+.wt-toc-share-action {
+  align-items: center;
+  color: var(--muted);
+  display: inline-flex;
+  flex: none;
+  height: 30px;
+  justify-content: center;
+  padding: 0;
+  width: 30px;
+}
+.wt-toc-commit-action:hover,
+.wt-toc-share-action:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+.wt-toc-commit-action:disabled,
+.wt-toc-share-action:disabled {
+  cursor: default;
+  opacity: 0.58;
+}
+.wt-toc-share-action svg {
+  display: block;
+  flex: none;
 }
 
 /* ---- Agent narration (distinct from the reviewer's own comments) ---------- */
@@ -272,6 +321,8 @@
   flex-direction: column;
   height: 100%;
   min-height: 0;
+  min-width: 0;
+  width: 100%;
 }
 .wt-arc {
   align-items: center;
@@ -407,6 +458,9 @@
   top: 50%;
   transform: translateY(-50%);
 }
+.wt-arc-action-nodes {
+  gap: 2px;
+}
 .wt-arc-node {
   align-items: center;
   background: var(--code-bg);
@@ -428,6 +482,13 @@
 .wt-arc-node:hover {
   transform: scale(1.05);
 }
+.wt-arc-node:disabled {
+  cursor: default;
+  opacity: 0.48;
+}
+.wt-arc-node:disabled:hover {
+  transform: scale(1);
+}
 .wt-arc-node:active {
   transform: scale(0.95);
 }
@@ -448,6 +509,9 @@
 }
 .wt-arc-node.current:active {
   transform: scale(1.04);
+}
+.wt-arc-share-node {
+  color: var(--text);
 }
 .wt-hybrid-scroll {
   flex: 1;

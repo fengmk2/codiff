@@ -87,6 +87,7 @@ import { applySearchHighlights } from '../../lib/search-highlights.ts';
 import type {
   ChangedFile,
   CommitMetadata,
+  DiffImageContentRequest,
   DiffImageContentResult,
   DiffSection,
   GitIdentity,
@@ -148,6 +149,7 @@ function CodeViewHeader({
   onToggleCollapsed,
   onToggleMarkdownPreview,
   onToggleViewed,
+  readOnly,
 }: {
   isSectionLoading: boolean;
   meta: CodeViewItemMetadata;
@@ -156,6 +158,7 @@ function CodeViewHeader({
   onToggleCollapsed: (file: ChangedFile, isCollapsed: boolean, reviewKey: string) => void;
   onToggleMarkdownPreview: (section: DiffSection) => void;
   onToggleViewed: (file: ChangedFile, isViewed: boolean, reviewIdentity: ReviewIdentity) => void;
+  readOnly: boolean;
 }) {
   const {
     canRenderMarkdown,
@@ -231,7 +234,7 @@ function CodeViewHeader({
           {isMarkdownPreview ? 'View as Diff' : 'View as Markdown'}
         </button>
       ) : null}
-      {canLoadSection ? (
+      {canLoadSection && !readOnly ? (
         <button
           className="codiff-load-button"
           disabled={isSectionLoading}
@@ -242,26 +245,30 @@ function CodeViewHeader({
           {isSectionLoading ? 'Loading...' : 'Load'}
         </button>
       ) : null}
-      <button
-        className="codiff-open-button"
-        disabled={!canOpenFile}
-        onClick={() => onOpenFile(file)}
-        title={canOpenFile ? 'Open file in editor' : 'Deleted files cannot be opened'}
-        type="button"
-      >
-        Open
-      </button>
-      <button
-        aria-pressed={isViewed}
-        className={`codiff-viewed-button${isViewed ? ' active' : ''}`}
-        onClick={() => onToggleViewed(file, isViewed, reviewIdentity)}
-        type="button"
-      >
-        <span aria-hidden className="codiff-viewed-checkbox">
-          {isViewed ? <Check className="codiff-viewed-check" size={10} weight="bold" /> : null}
-        </span>
-        Viewed
-      </button>
+      {!readOnly ? (
+        <>
+          <button
+            className="codiff-open-button"
+            disabled={!canOpenFile}
+            onClick={() => onOpenFile(file)}
+            title={canOpenFile ? 'Open file in editor' : 'Deleted files cannot be opened'}
+            type="button"
+          >
+            Open
+          </button>
+          <button
+            aria-pressed={isViewed}
+            className={`codiff-viewed-button${isViewed ? ' active' : ''}`}
+            onClick={() => onToggleViewed(file, isViewed, reviewIdentity)}
+            type="button"
+          >
+            <span aria-hidden className="codiff-viewed-checkbox">
+              {isViewed ? <Check className="codiff-viewed-check" size={10} weight="bold" /> : null}
+            </span>
+            Viewed
+          </button>
+        </>
+      ) : null}
     </div>
   );
 }
@@ -353,11 +360,13 @@ type ImagePreviewMode = 'side-by-side' | 'slider';
 
 function ImageDiffPreview({
   file,
+  loadImageContent,
   onLayoutReady,
   section,
   source,
 }: {
   file: ChangedFile;
+  loadImageContent: (request: DiffImageContentRequest) => Promise<DiffImageContentResult>;
   onLayoutReady: (sectionId: string) => void;
   section: DiffSection;
   source: ReviewSource;
@@ -438,12 +447,11 @@ function ImageDiffPreview({
     let canceled = false;
     const activeRequestKey = requestKey;
 
-    window.codiff
-      .getDiffImageContent({
-        kind: section.kind,
-        path: file.path,
-        source,
-      })
+    loadImageContent({
+      kind: section.kind,
+      path: file.path,
+      source,
+    })
       .then((nextResult) => {
         if (!canceled) {
           setLoadState({
@@ -467,7 +475,7 @@ function ImageDiffPreview({
     return () => {
       canceled = true;
     };
-  }, [file.path, requestKey, section.kind, source]);
+  }, [file.path, loadImageContent, requestKey, section.kind, source]);
 
   useEffect(() => {
     onLayoutReady(section.id);
@@ -1279,6 +1287,7 @@ export function ReviewCodeView({
   commitMetadata,
   diffLineHeight = DIFF_LINE_HEIGHT,
   diffStyle,
+  disableWorkerPool = false,
   files,
   focusCommentId,
   focusCommentRequest,
@@ -1286,6 +1295,7 @@ export function ReviewCodeView({
   gitIdentity,
   hunkNavigation,
   isPullRequest,
+  isReadOnly = false,
   itemVersionByKey,
   keymap,
   loadingSectionIds,
@@ -1293,6 +1303,7 @@ export function ReviewCodeView({
   onAskCodex,
   onCreateComment,
   onDeleteComment,
+  onLoadImageContent,
   onLoadSection,
   onOpenFile,
   onSelectPathFromScroll,
@@ -1320,6 +1331,7 @@ export function ReviewCodeView({
   commitMetadata: CommitMetadata | null;
   diffLineHeight?: number;
   diffStyle: CodiffDiffStyle;
+  disableWorkerPool?: boolean;
   files: ReadonlyArray<ChangedFile>;
   focusCommentId: string | null;
   focusCommentRequest: number;
@@ -1327,6 +1339,7 @@ export function ReviewCodeView({
   gitIdentity: GitIdentity | null;
   hunkNavigation: HunkNavigationRequest | null;
   isPullRequest: boolean;
+  isReadOnly?: boolean;
   itemVersionByKey: Readonly<Record<string, number>>;
   keymap: CodiffKeymap;
   loadingSectionIds: ReadonlySet<string>;
@@ -1334,6 +1347,7 @@ export function ReviewCodeView({
   onAskCodex: (commentId: string) => void;
   onCreateComment: (comment: Omit<ReviewComment, 'body' | 'id'>) => void;
   onDeleteComment: (commentId: string) => void;
+  onLoadImageContent?: (request: DiffImageContentRequest) => Promise<DiffImageContentResult>;
   onLoadSection: (file: ChangedFile, section: DiffSection) => void;
   onOpenFile: (file: ChangedFile) => void;
   onSelectPathFromScroll: (viewer: CodeViewInstance) => void;
@@ -1510,8 +1524,9 @@ export function ReviewCodeView({
         searchTargets.push({ fileDiff, itemId: id, path: file.path });
         nextSearchTargetsByBaseItemId.set(baseItemId, searchTargets);
         const markdownPreview = getMarkdownPreviewContents(file, section, fileDiff);
-        const canRenderImage = canRenderImagePreview(file.path, section);
-        const canRenderMarkdown = markdownPreview != null;
+        const canRenderImage =
+          !isReadOnly && onLoadImageContent != null && canRenderImagePreview(file.path, section);
+        const canRenderMarkdown = !isReadOnly && markdownPreview != null;
         const isMarkdownPreview = canRenderMarkdown && markdownPreviewSections.has(section.id);
         const isSelected = block.fileSelected ?? block.selected ?? selectedPath === file.path;
         const reviewVersionPrefix = `${itemVersionByKey[reviewKey] ?? 0}:${block.id}:${
@@ -1717,9 +1732,11 @@ export function ReviewCodeView({
     diffStyle,
     forceExpandedPaths,
     imagePreviewLayoutPassBySection,
+    isReadOnly,
     itemVersionByKey,
     markdownPreviewLayoutPassBySection,
     markdownPreviewSections,
+    onLoadImageContent,
     reviewBlocks,
     selectedPath,
     showWhitespace,
@@ -1775,6 +1792,9 @@ export function ReviewCodeView({
       if (context.item.type !== 'diff') {
         return;
       }
+      if (isReadOnly) {
+        return;
+      }
 
       const meta = itemMetadata.get(context.item.id);
       if (!meta || meta.isCollapsed) {
@@ -1803,6 +1823,7 @@ export function ReviewCodeView({
     [
       cancelPendingEmptyCommentDeletes,
       deferCommentLineHighlightClear,
+      isReadOnly,
       itemMetadata,
       onCreateComment,
     ],
@@ -1814,8 +1835,8 @@ export function ReviewCodeView({
         collapsedContextThreshold: diffCollapsedContextThreshold,
         diffIndicators: 'bars',
         diffStyle,
-        enableGutterUtility: true,
-        enableLineSelection: true,
+        enableGutterUtility: !isReadOnly,
+        enableLineSelection: !isReadOnly,
         expandUnchanged: false,
         expansionLineCount: diffContextExpansionLineCount,
         hunkSeparators: 'line-info-basic',
@@ -1826,10 +1847,16 @@ export function ReviewCodeView({
         },
         lineHoverHighlight: 'both',
         onGutterUtilityClick: (range, context) => {
+          if (isReadOnly) {
+            return;
+          }
           ignoreNextLineSelectionEndRef.current = context.item.type === 'diff';
           createCommentForRange(range, context);
         },
         onLineClick: (line, context) => {
+          if (isReadOnly) {
+            return;
+          }
           if (isInteractiveReviewEvent(line.event)) {
             return;
           }
@@ -1861,6 +1888,9 @@ export function ReviewCodeView({
           });
         },
         onLineSelectionEnd: (range, context) => {
+          if (isReadOnly) {
+            return;
+          }
           if (ignoreNextLineSelectionEndRef.current) {
             ignoreNextLineSelectionEndRef.current = false;
             return;
@@ -1916,6 +1946,7 @@ export function ReviewCodeView({
       commitDetailsItemId,
       createCommentForRange,
       diffStyle,
+      isReadOnly,
       itemMetadata,
       loadingSectionIds,
       onCreateComment,
@@ -2270,6 +2301,9 @@ export function ReviewCodeView({
       }
 
       const selection = selectedLinesRef.current;
+      if (isReadOnly) {
+        return;
+      }
       if (
         !selection ||
         navigatedSelectionRef.current == null ||
@@ -2290,7 +2324,7 @@ export function ReviewCodeView({
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [createCommentForRange, items]);
+  }, [createCommentForRange, isReadOnly, items]);
 
   const scheduleSearchHighlights = useCallback(() => {
     const viewer = codeViewRef.current?.getInstance();
@@ -2402,6 +2436,7 @@ export function ReviewCodeView({
           onToggleCollapsed={onToggleCollapsed}
           onToggleMarkdownPreview={toggleMarkdownPreview}
           onToggleViewed={onToggleViewed}
+          readOnly={isReadOnly}
         />
       ) : null;
     },
@@ -2410,6 +2445,7 @@ export function ReviewCodeView({
       commitDetailsCollapsed,
       commitMetadata,
       itemMetadata,
+      isReadOnly,
       loadingSectionIds,
       onLoadSection,
       onOpenFile,
@@ -2428,9 +2464,10 @@ export function ReviewCodeView({
     ) => {
       if (annotation.metadata.type === 'image-preview') {
         const meta = itemMetadata.get(item.id);
-        return meta ? (
+        return meta && onLoadImageContent ? (
           <ImageDiffPreview
             file={meta.file}
+            loadImageContent={onLoadImageContent}
             onLayoutReady={markImagePreviewLayoutReady}
             section={meta.section}
             source={source}
@@ -2503,6 +2540,7 @@ export function ReviewCodeView({
       markMarkdownPreviewLayoutReady,
       markImagePreviewLayoutReady,
       onAskCodex,
+      onLoadImageContent,
       onSubmitComment,
       onUpdateComment,
       renderComments,
@@ -2544,13 +2582,31 @@ export function ReviewCodeView({
     ],
   );
 
-  return (
+  const codeView = (
+    <CodeView
+      className="code-view"
+      disableWorkerPool={disableWorkerPool}
+      items={items}
+      onScroll={handleScroll}
+      onSelectedLinesChange={setCodeViewSelectedLines}
+      options={codeViewOptions}
+      ref={codeViewRef}
+      renderAnnotation={renderAnnotation}
+      renderCustomHeader={renderCustomHeader}
+      selectedLines={isReadOnly ? null : selectedLines}
+    />
+  );
+
+  return disableWorkerPool ? (
+    codeView
+  ) : (
     <WorkerPoolContextProvider
       highlighterOptions={workerHighlighterOptions}
       poolOptions={workerPoolOptions}
     >
       <CodeView
         className="code-view"
+        disableWorkerPool={false}
         items={items}
         onScroll={handleScroll}
         onSelectedLinesChange={setCodeViewSelectedLines}
@@ -2558,7 +2614,7 @@ export function ReviewCodeView({
         ref={codeViewRef}
         renderAnnotation={renderAnnotation}
         renderCustomHeader={renderCustomHeader}
-        selectedLines={selectedLines}
+        selectedLines={isReadOnly ? null : selectedLines}
       />
     </WorkerPoolContextProvider>
   );

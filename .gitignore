@@ -2,6 +2,7 @@
 .cache/
 .pnpm-debug.log
 /node_modules/
+core/node_modules/
 coverage/
 dist/
 out/

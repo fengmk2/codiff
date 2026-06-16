@@ -3,8 +3,8 @@
 const { fileSort, getGravatarHash, git, gitBufferWithInput, gitOrEmpty } = require('./common.cjs');
 
 /**
- * @typedef {import('../../src/types.ts').CommitMetadata} CommitMetadata
- * @typedef {import('../../src/types.ts').CommitMetadataFile} CommitMetadataFile
+ * @typedef {import('../../core/types.ts').CommitMetadata} CommitMetadata
+ * @typedef {import('../../core/types.ts').CommitMetadataFile} CommitMetadataFile
  * @typedef {import('./common.cjs').StatusItem} StatusItem
  * @typedef {{additions?: number; binary: boolean; deletions?: number; path: string}} NumstatItem
  */

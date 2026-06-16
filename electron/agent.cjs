@@ -8,7 +8,7 @@ const { readClaudeSessionContext } = require('./claude-session-context.cjs');
 const { readPiSessionContext } = require('./pi-session-context.cjs');
 
 /**
- * @typedef {import('../src/types.ts').WalkthroughContext} WalkthroughContext
+ * @typedef {import('../core/types.ts').WalkthroughContext} WalkthroughContext
  * @typedef {{
  *   fallbackModel?: string;
  *   model?: string;

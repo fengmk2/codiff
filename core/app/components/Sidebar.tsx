@@ -51,11 +51,13 @@ export function Sidebar({
   onSearchQueryChange,
   onSelectPath,
   onSelectSource,
+  onShareWalkthrough,
   onToggleCommitView,
   pullRequestSource,
   reloadDeltaPaths,
   searchQuery,
   selectedPath,
+  shareWalkthroughDisabled,
   showWhitespace,
   viewed,
   walkthroughError,
@@ -80,11 +82,13 @@ export function Sidebar({
   onSearchQueryChange: (query: string) => void;
   onSelectPath: (path: string) => void;
   onSelectSource: (source: ReviewSource) => void;
+  onShareWalkthrough?: () => void;
   onToggleCommitView: () => void;
   pullRequestSource: PullRequestSource | null;
   reloadDeltaPaths: ReadonlySet<string>;
   searchQuery: string;
   selectedPath: string | null;
+  shareWalkthroughDisabled?: boolean;
   showWhitespace: boolean;
   viewed: Record<string, string>;
   walkthroughError: WalkthroughError | null;
@@ -335,6 +339,8 @@ export function Sidebar({
         <NarrativeSidebar
           files={commitFiles}
           navigation={narrativeNavigation}
+          onShareWalkthrough={onShareWalkthrough}
+          shareWalkthroughDisabled={shareWalkthroughDisabled}
           showWhitespace={showWhitespace}
           walkthrough={narrativeWalkthrough}
         />

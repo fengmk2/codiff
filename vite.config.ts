@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import nkzw from '@nkzw/oxlint-config';
 import babel from '@rolldown/plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
@@ -14,21 +15,28 @@ export default defineConfig({
       sortScripts: true,
     },
     experimentalTailwindcss: {
-      stylesheet: 'src/App.css',
+      stylesheet: 'core/App.css',
     },
     ignorePatterns: [
       'coverage/',
       'dist/',
       'index.html',
       'pnpm-lock.yaml',
-      'src/__generated__/',
-      'src/translations/',
+      'core/__generated__/',
+      'core/node_modules/',
+      'core/translations/',
     ],
     singleQuote: true,
   },
   lint: {
     extends: [nkzw],
-    ignorePatterns: ['bin/', 'dist/', 'electron/', 'vite.config.ts.timestamp-*'],
+    ignorePatterns: [
+      'bin/',
+      'dist/',
+      'electron/',
+      'core/node_modules/',
+      'vite.config.ts.timestamp-*',
+    ],
     options: { typeAware: true, typeCheck: true },
     overrides: [
       {
@@ -46,6 +54,18 @@ export default defineConfig({
     tailwindcss(),
     react(),
   ],
+  resolve: {
+    alias: [
+      { find: /^react$/, replacement: resolve(__dirname, 'node_modules/react') },
+      { find: /^react\/(.*)$/, replacement: `${resolve(__dirname, 'node_modules/react')}/$1` },
+      { find: /^react-dom$/, replacement: resolve(__dirname, 'node_modules/react-dom') },
+      {
+        find: /^react-dom\/(.*)$/,
+        replacement: `${resolve(__dirname, 'node_modules/react-dom')}/$1`,
+      },
+    ],
+    dedupe: ['react', 'react-dom'],
+  },
   run: {
     tasks: {
       'test:all': {
@@ -57,8 +77,8 @@ export default defineConfig({
     '*': 'vp check --fix',
   },
   test: {
-    include: ['electron/**/*.test.ts', 'src/**/*.test.{ts,tsx}'],
-    setupFiles: ['./src/__tests__/setup.ts'],
+    include: ['core/**/*.test.{ts,tsx}', 'electron/**/*.test.ts'],
+    setupFiles: ['./core/__tests__/setup.ts'],
   },
   worker: {
     format: 'es',

@@ -39,12 +39,12 @@ const {
 } = require('./git-state/working-tree.cjs');
 
 /**
- * @typedef {import('../src/types.ts').DiffSectionContentRequest} DiffSectionContentRequest
- * @typedef {import('../src/types.ts').DiffImageContentRequest} DiffImageContentRequest
- * @typedef {import('../src/types.ts').DiffImageContentResult} DiffImageContentResult
- * @typedef {import('../src/types.ts').RepositoryHistory} RepositoryHistory
- * @typedef {import('../src/types.ts').RepositoryState} RepositoryState
- * @typedef {import('../src/types.ts').ReviewSource} ReviewSource
+ * @typedef {import('../core/types.ts').DiffSectionContentRequest} DiffSectionContentRequest
+ * @typedef {import('../core/types.ts').DiffImageContentRequest} DiffImageContentRequest
+ * @typedef {import('../core/types.ts').DiffImageContentResult} DiffImageContentResult
+ * @typedef {import('../core/types.ts').RepositoryHistory} RepositoryHistory
+ * @typedef {import('../core/types.ts').RepositoryState} RepositoryState
+ * @typedef {import('../core/types.ts').ReviewSource} ReviewSource
  */
 
 /** @param {string} launchPath @param {ReviewSource} [source] @param {{showWhitespace?: boolean}} [options] @returns {Promise<RepositoryState>} */

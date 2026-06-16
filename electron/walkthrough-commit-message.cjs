@@ -11,9 +11,9 @@ const { parseJSONMessage, truncate } = require('./agent-shared.cjs');
 const MAX_OTHER_FILES = 60;
 
 /**
- * @typedef {import('../src/types.ts').ChangedFile} ChangedFile
- * @typedef {import('../src/types.ts').RepositoryState} RepositoryState
- * @typedef {import('../src/types.ts').WalkthroughCommitMessageRequest} WalkthroughCommitMessageRequest
+ * @typedef {import('../core/types.ts').ChangedFile} ChangedFile
+ * @typedef {import('../core/types.ts').RepositoryState} RepositoryState
+ * @typedef {import('../core/types.ts').WalkthroughCommitMessageRequest} WalkthroughCommitMessageRequest
  * @typedef {import('./agent.cjs').Agent} Agent
  * @typedef {import('./agent.cjs').AgentOptions} AgentOptions
  */

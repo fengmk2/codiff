@@ -9,16 +9,16 @@ const { promisify } = require('node:util');
 const execFileAsync = promisify(execFile);
 
 /**
- * @typedef {import('../src/types.ts').ChangedFile} ChangedFile
- * @typedef {import('../src/types.ts').DiffImageRevision} DiffImageRevision
- * @typedef {import('../src/types.ts').DiffSection} DiffSection
- * @typedef {import('../src/types.ts').DiffSectionContentRequest} DiffSectionContentRequest
- * @typedef {import('../src/types.ts').GitFileStatus} GitFileStatus
- * @typedef {import('../src/types.ts').PullRequestReviewComment} PullRequestReviewComment
- * @typedef {import('../src/types.ts').RepositoryState} RepositoryState
- * @typedef {import('../src/types.ts').ReviewSource} ReviewSource
- * @typedef {import('../src/types.ts').SubmitPullRequestCommentRequest} SubmitPullRequestCommentRequest
- * @typedef {import('../src/types.ts').SubmitPullRequestReviewRequest} SubmitPullRequestReviewRequest
+ * @typedef {import('../../core/types.ts').ChangedFile} ChangedFile
+ * @typedef {import('../../core/types.ts').DiffImageRevision} DiffImageRevision
+ * @typedef {import('../../core/types.ts').DiffSection} DiffSection
+ * @typedef {import('../../core/types.ts').DiffSectionContentRequest} DiffSectionContentRequest
+ * @typedef {import('../../core/types.ts').GitFileStatus} GitFileStatus
+ * @typedef {import('../../core/types.ts').PullRequestReviewComment} PullRequestReviewComment
+ * @typedef {import('../../core/types.ts').RepositoryState} RepositoryState
+ * @typedef {import('../../core/types.ts').ReviewSource} ReviewSource
+ * @typedef {import('../../core/types.ts').SubmitPullRequestCommentRequest} SubmitPullRequestCommentRequest
+ * @typedef {import('../../core/types.ts').SubmitPullRequestReviewRequest} SubmitPullRequestReviewRequest
  * @typedef {'staged' | 'unstaged'} WorkingTreeSectionKind
  * @typedef {{cacheKey: string; contents: string; name: string}} TextFile
  * @typedef {{reason: string; canLoad?: boolean; fileCount?: number; fingerprint?: string; limit?: number; loadState?: DiffSection['loadState']; size?: number}} DiffSummary

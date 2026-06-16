@@ -122,6 +122,7 @@ import type {
   RepositoryState,
   ReviewAssistantRequest,
   ReviewSource,
+  SharedWalkthroughSnapshot,
   TerminalHelperStatus,
   NarrativeWalkthrough,
   WalkthroughCommitMessageRequest,
@@ -247,6 +248,8 @@ export default function App() {
   );
   const [walkthroughLoading, setWalkthroughLoading] = useState(false);
   const [walkthroughUnread, setWalkthroughUnread] = useState(false);
+  const [walkthroughSharing, setWalkthroughSharing] = useState(false);
+  const [shareWalkthroughEnabled, setShareWalkthroughEnabled] = useState(false);
   const [mainMode, setMainMode] = useState<MainMode>('review');
   const historyRequestRef = useRef(0);
   const historySourceRef = useRef<ReviewSource | null>(null);
@@ -786,6 +789,15 @@ export default function App() {
 
   useEffect(() => {
     let canceled = false;
+
+    void window.codiff.getFeatureFlags().then(
+      (flags) => {
+        if (!canceled) {
+          setShareWalkthroughEnabled(flags.walkthroughSharing);
+        }
+      },
+      () => {},
+    );
 
     window.codiff.getConfig().then((nextConfig) => {
       if (!canceled) {
@@ -2092,6 +2104,54 @@ export default function App() {
       });
   }, []);
 
+  const shareWalkthrough = useCallback(() => {
+    const currentState = stateRef.current;
+    const currentWalkthrough = narrativeWalkthroughRef.current;
+    if (!shareWalkthroughEnabled || !currentState || !currentWalkthrough || walkthroughSharing) {
+      return;
+    }
+
+    const snapshot: SharedWalkthroughSnapshot = {
+      branch: currentState.branch,
+      codiffVersion: 'dev',
+      exportedAt: new Date().toISOString(),
+      files: currentState.files,
+      kind: 'codiff-walkthrough-share',
+      preferences: {
+        codeFontFamily: preferencesRef.current.codeFontFamily,
+        codeFontSize: preferencesRef.current.codeFontSize,
+        diffStyle: preferencesRef.current.diffStyle,
+        showWhitespace: preferencesRef.current.showWhitespace,
+        theme: preferencesRef.current.theme,
+        wordWrap: preferencesRef.current.wordWrap,
+      },
+      repository: {
+        root: currentState.root,
+        source: currentState.source,
+      },
+      reviewComments: currentState.reviewComments,
+      version: 1,
+      walkthrough: currentWalkthrough,
+    };
+
+    setWalkthroughSharing(true);
+    void window.codiff
+      .shareWalkthrough(snapshot)
+      .then((result) => {
+        if (result.status === 'failed') {
+          window.alert(result.reason);
+        }
+      })
+      .catch((error: unknown) => {
+        window.alert(error instanceof Error ? error.message : String(error));
+      })
+      .finally(() => {
+        setWalkthroughSharing(false);
+      });
+  }, [shareWalkthroughEnabled, walkthroughSharing]);
+
+  const enabledShareWalkthrough = shareWalkthroughEnabled ? shareWalkthrough : undefined;
+
   const activeAgentBackend = launchOptions.agentBackend ?? codiffConfig.settings.agentBackend;
   const agentLabel = getAgentLabel(activeAgentBackend);
   const agentSkillLabel = `${agentLabel} Skill`;
@@ -2182,6 +2242,7 @@ export default function App() {
     onAskCodex: askCodex,
     onCreateComment: createComment,
     onDeleteComment: deleteComment,
+    onLoadImageContent: window.codiff.getDiffImageContent,
     onLoadSection: loadDiffSection,
     onOpenFile: openFile,
     onSelectPathFromScroll: updateSelectedPathFromScroll,
@@ -2352,11 +2413,13 @@ export default function App() {
           }
           onSelectPath={selectPath}
           onSelectSource={selectSource}
+          onShareWalkthrough={enabledShareWalkthrough}
           onToggleCommitView={showPlainCommitView ? closeCommitView : openCommitView}
           pullRequestSource={historySource?.type === 'pull-request' ? historySource : null}
           reloadDeltaPaths={reloadDeltaPaths}
           searchQuery={sidebarMode === 'history' ? historySearchQuery : fileSearchQuery}
           selectedPath={visibleSelectedPath}
+          shareWalkthroughDisabled={walkthroughSharing}
           showWhitespace={showWhitespace}
           viewed={viewed}
           walkthroughError={walkthroughError}
@@ -2382,8 +2445,10 @@ export default function App() {
             navigation={narrativeNavigation}
             onActiveReviewTargetChange={updateActiveWalkthroughReviewTarget}
             onCommit={commitWalkthrough}
+            onShareWalkthrough={enabledShareWalkthrough}
             onUpdateCommitMessage={updateWalkthroughCommitMessage}
             renderDiffBlocks={renderWalkthroughDiffBlocks}
+            shareWalkthroughDisabled={walkthroughSharing}
             showWhitespace={showWhitespace}
             walkthrough={narrativeWalkthrough}
           />

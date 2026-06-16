@@ -1,3 +1,6 @@
+packages:
+  - core
+
 allowBuilds:
   '@google/genai': false
   '@swc/core': true
@@ -17,6 +20,7 @@ onlyBuiltDependencies:
   - electron-winstaller
   - unrs-resolver
 overrides:
+  extract-zip>yauzl: ^3.4.0
   vite: 'catalog:'
   vitest: 'catalog:'
 peerDependencyRules:

@@ -1,6 +1,7 @@
 // @ts-check
 
 const { existsSync, readFileSync } = require('node:fs');
+const { userInfo } = require('node:os');
 const { dirname, join, relative, resolve } = require('node:path');
 const { pathToFileURL } = require('node:url');
 const {
@@ -71,12 +72,13 @@ const {
   normalizeNarrativeWalkthrough,
   readNarrativeWalkthrough,
 } = require('./narrative-walkthrough.cjs');
+const { uploadSharedWalkthrough } = require('./shared-walkthrough-upload.cjs');
 
 /**
- * @typedef {import('../src/config/types.ts').CodiffConfig} CodiffConfig
- * @typedef {import('../src/types.ts').CodiffLaunchOptions} CodiffLaunchOptions
- * @typedef {import('../src/types.ts').CodiffTheme} CodiffTheme
- * @typedef {import('../src/types.ts').ReviewSource} ReviewSource
+ * @typedef {import('../core/config/types.ts').CodiffConfig} CodiffConfig
+ * @typedef {import('../core/types.ts').CodiffLaunchOptions} CodiffLaunchOptions
+ * @typedef {import('../core/types.ts').CodiffTheme} CodiffTheme
+ * @typedef {import('../core/types.ts').ReviewSource} ReviewSource
  * @typedef {{key: string; repositoryRoot: string; sourceKey: string}} WindowIdentity
  * @typedef {{direction: string; name: string; owner: string; repo: string}} GitHubRemote
  * @typedef {{repositoryPath?: string; launchOptions?: CodiffLaunchOptions}} SingleInstanceAdditionalData
@@ -99,6 +101,14 @@ const windowInitialRepositoryStates = new Map();
 const pendingCommentsClipboardController = createPendingCommentsClipboardController({ clipboard });
 /** @type {CodiffConfig} */
 let config = createDefaultConfig();
+
+const canUseWalkthroughSharing = () => {
+  try {
+    return !app.isPackaged && userInfo().username === 'cpojer';
+  } catch {
+    return false;
+  }
+};
 
 /**
  * @type {Map<
@@ -236,8 +246,8 @@ const refreshAgentModels = (agent) => {
 };
 
 /**
- * @param {import('../src/types.ts').WalkthroughContext | null | undefined} providedContext
- * @param {import('../src/types.ts').WalkthroughContext | null | undefined} sessionContext
+ * @param {import('../core/types.ts').WalkthroughContext | null | undefined} providedContext
+ * @param {import('../core/types.ts').WalkthroughContext | null | undefined} sessionContext
  */
 const mergeWalkthroughContexts = (providedContext, sessionContext) => {
   if (!providedContext) {
@@ -1074,6 +1084,40 @@ ipcMain.handle('codiff:getNarrativeWalkthrough', async (event, source) => {
     };
   }
 });
+
+ipcMain.handle('codiff:shareWalkthrough', async (event, snapshot) => {
+  if (!canUseWalkthroughSharing()) {
+    return {
+      reason: 'Walkthrough sharing is only available in local development builds.',
+      status: 'failed',
+    };
+  }
+
+  try {
+    const url = await uploadSharedWalkthrough({
+      openExternal: (url) => shell.openExternal(url),
+      serviceUrl:
+        process.env.CODIFF_SHARE_SERVER_URL ||
+        (app.isPackaged ? 'https://api.codiff.dev' : 'http://localhost:8787'),
+      snapshot: {
+        ...snapshot,
+        codiffVersion: app.getVersion(),
+        exportedAt: new Date().toISOString(),
+      },
+    });
+    clipboard.writeText(url);
+    return { status: 'uploaded', url };
+  } catch (error) {
+    return {
+      reason: error instanceof Error ? error.message : String(error),
+      status: 'failed',
+    };
+  }
+});
+
+ipcMain.handle('codiff:getFeatureFlags', () => ({
+  walkthroughSharing: canUseWalkthroughSharing(),
+}));
 
 ipcMain.handle('codiff:askReviewAssistant', async (event, request) => {
   const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();

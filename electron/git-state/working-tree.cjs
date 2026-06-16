@@ -22,12 +22,12 @@ const {
 } = require('./common.cjs');
 
 /**
- * @typedef {import('../../src/types.ts').ChangedFile} ChangedFile
- * @typedef {import('../../src/types.ts').DiffImageContentRequest} DiffImageContentRequest
- * @typedef {import('../../src/types.ts').DiffImageContentResult} DiffImageContentResult
- * @typedef {import('../../src/types.ts').DiffSection} DiffSection
- * @typedef {import('../../src/types.ts').DiffSectionContentRequest} DiffSectionContentRequest
- * @typedef {import('../../src/types.ts').RepositoryState} RepositoryState
+ * @typedef {import('../../core/types.ts').ChangedFile} ChangedFile
+ * @typedef {import('../../core/types.ts').DiffImageContentRequest} DiffImageContentRequest
+ * @typedef {import('../../core/types.ts').DiffImageContentResult} DiffImageContentResult
+ * @typedef {import('../../core/types.ts').DiffSection} DiffSection
+ * @typedef {import('../../core/types.ts').DiffSectionContentRequest} DiffSectionContentRequest
+ * @typedef {import('../../core/types.ts').RepositoryState} RepositoryState
  * @typedef {import('./common.cjs').StatusItem} StatusItem
  * @typedef {'staged' | 'unstaged'} WorkingTreeSectionKind
  */

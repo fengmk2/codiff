@@ -16,13 +16,13 @@ const {
 } = require('./common.cjs');
 
 /**
- * @typedef {import('../../src/types.ts').ChangedFile} ChangedFile
- * @typedef {import('../../src/types.ts').DiffImageContentResult} DiffImageContentResult
- * @typedef {import('../../src/types.ts').PullRequestReviewComment} PullRequestReviewComment
- * @typedef {import('../../src/types.ts').RepositoryState} RepositoryState
- * @typedef {import('../../src/types.ts').ReviewSource} ReviewSource
- * @typedef {import('../../src/types.ts').SubmitPullRequestCommentRequest} SubmitPullRequestCommentRequest
- * @typedef {import('../../src/types.ts').SubmitPullRequestReviewRequest} SubmitPullRequestReviewRequest
+ * @typedef {import('../../core/types.ts').ChangedFile} ChangedFile
+ * @typedef {import('../../core/types.ts').DiffImageContentResult} DiffImageContentResult
+ * @typedef {import('../../core/types.ts').PullRequestReviewComment} PullRequestReviewComment
+ * @typedef {import('../../core/types.ts').RepositoryState} RepositoryState
+ * @typedef {import('../../core/types.ts').ReviewSource} ReviewSource
+ * @typedef {import('../../core/types.ts').SubmitPullRequestCommentRequest} SubmitPullRequestCommentRequest
+ * @typedef {import('../../core/types.ts').SubmitPullRequestReviewRequest} SubmitPullRequestReviewRequest
  * @typedef {{owner: string; repo: string}} GitHubRepositoryReference
  * @typedef {{full_name?: string; name?: string; owner?: {login?: string}}} GitHubRepositoryMetadata
  * @typedef {{number: number; owner: string; repo: string; url: string}} PullRequestReference
@@ -672,7 +672,7 @@ const BINARY_DIFF_MARKER = /^Binary files .* differ/m;
  * @param {string} patch
  * @param {import('./common.cjs').FileContentResult} [oldFile]
  * @param {import('./common.cjs').FileContentResult} [newFile]
- * @returns {import('../../src/types.ts').DiffSection}
+ * @returns {import('../../core/types.ts').DiffSection}
  */
 const createPullRequestSection = (pullRequest, file, patch, oldFile, newFile) => {
   const id = `${file.filename}:pull-request:${pullRequest.number}`;
