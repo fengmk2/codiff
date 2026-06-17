@@ -133,8 +133,8 @@ export const getReviewCommentsDigest = (comments: ReadonlyArray<ReviewComment>) 
         )}:${comment.codexReply?.status ?? ''}:${getCommentTextDigest(
           comment.codexReply?.body,
         )}:${getCommentTextDigest(comment.codexReply?.error)}:${
-          comment.githubSubmit?.status ?? ''
-        }:${comment.githubSubmit?.error ?? ''}`,
+          comment.remoteSubmit?.status ?? ''
+        }:${comment.remoteSubmit?.error ?? ''}`,
     )
     .join('\0');
 

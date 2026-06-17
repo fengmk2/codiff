@@ -1911,14 +1911,14 @@ export default function App() {
     [bumpItemVersion],
   );
 
-  const updateGitHubSubmit = useCallback(
-    (commentId: string, githubSubmit: ReviewComment['githubSubmit']) => {
+  const updateRemoteSubmit = useCallback(
+    (commentId: string, remoteSubmit: ReviewComment['remoteSubmit']) => {
       setReviewComments((current) =>
         current.map((comment) =>
           comment.id === commentId
             ? {
                 ...comment,
-                githubSubmit,
+                remoteSubmit,
               }
             : comment,
         ),
@@ -1992,12 +1992,12 @@ export default function App() {
         currentState?.source.type !== 'pull-request' ||
         !comment ||
         comment.body.trim().length === 0 ||
-        comment.githubSubmit?.status === 'submitting'
+        comment.remoteSubmit?.status === 'submitting'
       ) {
         return;
       }
 
-      updateGitHubSubmit(comment.id, { status: 'submitting' });
+      updateRemoteSubmit(comment.id, { status: 'submitting' });
       void window.codiff
         .submitPullRequestComment({
           comment: {
@@ -2033,13 +2033,13 @@ export default function App() {
           bumpItemVersion(comment.filePath);
         })
         .catch((error: unknown) => {
-          updateGitHubSubmit(comment.id, {
+          updateRemoteSubmit(comment.id, {
             error: error instanceof Error ? error.message : String(error),
             status: 'error',
           });
         });
     },
-    [bumpItemVersion, updateGitHubSubmit],
+    [bumpItemVersion, updateRemoteSubmit],
   );
 
   const submitPullRequestReview = useCallback(

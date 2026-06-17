@@ -2,6 +2,9 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 import { parseArgs } from 'node:util';
+import reviewSource from '../electron/review-source.cjs';
+
+const { parseReviewUrl, resolveReviewUrl } = reviewSource;
 
 export const flagDefinitions = [
   {
@@ -74,6 +77,7 @@ export const usageExamples = [
   { command: 'codiff a1b2c3d', description: 'Review a specific commit.' },
   { command: "codiff '#75'", description: 'Review pull request #75.' },
   { command: 'codiff pr 75', description: 'Review pull request #75 (alternate syntax).' },
+  { command: 'codiff mr 75', description: 'Review GitLab merge request !75.' },
   { command: 'codiff -w', description: 'Start with an LLM narrative walkthrough.' },
   { command: 'codiff -w a1b2c3d', description: 'Generate a narrative walkthrough for a commit.' },
 ];
@@ -184,102 +188,17 @@ const parsePullRequestNumberArgument = (arg) => {
 const parsePullRequestNumberValue = (arg) =>
   parsePullRequestNumberArgument(arg.startsWith('#') ? arg : `#${arg}`);
 
-const isPullRequestMarkerArgument = (arg) => /^(?:pr|pull-request)$/i.test(arg);
-
-const isPullRequestUrlArgument = (arg) => {
-  try {
-    const url = new URL(arg);
-    return (
-      url.hostname.toLowerCase() === 'github.com' &&
-      /^\/[^/]+\/[^/]+\/pull\/\d+\/?$/.test(url.pathname)
-    );
-  } catch {
-    return false;
-  }
-};
-
-const parseGitHubRemoteUrl = (value) => {
-  const trimmed = value.trim();
-  const sshMatch = trimmed.match(/^git@github\.com:([^/]+)\/(.+?)(?:\.git)?$/i);
-  if (sshMatch) {
-    return {
-      owner: sshMatch[1],
-      repo: sshMatch[2].replace(/\.git$/i, ''),
-    };
-  }
-
-  try {
-    const url = new URL(trimmed);
-    if (url.hostname.toLowerCase() !== 'github.com') {
-      return null;
-    }
-
-    const match = url.pathname.match(/^\/([^/]+)\/(.+?)(?:\.git)?$/);
-    return match
-      ? {
-          owner: match[1],
-          repo: match[2].replace(/\.git$/i, ''),
-        }
+const getReviewProviderMarker = (arg) =>
+  /^(?:pr|pull-request)$/i.test(arg)
+    ? 'github'
+    : /^(?:mr|merge-request)$/i.test(arg)
+      ? 'gitlab'
       : null;
-  } catch {
-    return null;
-  }
-};
 
-const readGitHubRemotes = (repositoryPath) => {
-  const repoRoot = execFileSync('git', ['-C', repositoryPath, 'rev-parse', '--show-toplevel'], {
-    encoding: 'utf8',
-  }).trim();
-  const raw = execFileSync('git', ['-C', repoRoot, 'remote', '-v'], { encoding: 'utf8' });
-  const remotes = [];
+const isPullRequestUrlArgument = (arg) => parseReviewUrl(arg) != null;
 
-  for (const line of raw.split('\n')) {
-    const match = line.match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)$/);
-    const remote = match ? parseGitHubRemoteUrl(match[2]) : null;
-    if (remote) {
-      remotes.push({
-        direction: match[3],
-        name: match[1],
-        ...remote,
-      });
-    }
-  }
-
-  return remotes;
-};
-
-const selectGitHubRemote = (remotes) =>
-  [...remotes].sort((left, right) => {
-    const getPriority = (remote) =>
-      remote.name === 'origin'
-        ? remote.direction === 'fetch'
-          ? 0
-          : 1
-        : remote.direction === 'fetch'
-          ? 2
-          : 3;
-    return getPriority(left) - getPriority(right);
-  })[0] ?? null;
-
-export const resolvePullRequestUrl = (repositoryPath, number) => {
-  let remotes;
-  try {
-    remotes = readGitHubRemotes(repositoryPath);
-  } catch {
-    throw new Error(
-      `Could not resolve PR #${number}. Run codiff from inside a GitHub repository or pass a full GitHub pull request URL.`,
-    );
-  }
-
-  const remote = selectGitHubRemote(remotes);
-  if (!remote) {
-    throw new Error(
-      `Could not resolve PR #${number} because this repository has no GitHub remote.`,
-    );
-  }
-
-  return `https://github.com/${remote.owner}/${remote.repo}/pull/${number}`;
-};
+export const resolvePullRequestUrl = (repositoryPath, number, provider) =>
+  resolveReviewUrl(repositoryPath, number, provider);
 
 export const parseArguments = (args) => {
   const { positionals, values } = parseArgs({
@@ -301,6 +220,7 @@ export const parseArguments = (args) => {
       ? values.agent
       : null;
   let pullRequestNumber = null;
+  let pullRequestProvider = null;
   let pullRequestUrl = null;
   let requestedPath = null;
   let sourceCandidate = null;
@@ -324,11 +244,13 @@ export const parseArguments = (args) => {
         continue;
       }
 
-      const nextNumber = isPullRequestMarkerArgument(arg)
+      const markerProvider = getReviewProviderMarker(arg);
+      const nextNumber = markerProvider
         ? parsePullRequestNumberValue(positionals[index + 1] ?? '')
         : null;
       if (nextNumber != null) {
         pullRequestNumber = nextNumber;
+        pullRequestProvider = markerProvider;
         index += 1;
         continue;
       }
@@ -381,6 +303,7 @@ export const parseArguments = (args) => {
     commitRef,
     help: values.help === true,
     pullRequestNumber,
+    ...(pullRequestProvider ? { pullRequestProvider } : {}),
     pullRequestUrl,
     requestedPath: resolve(requestedPath ?? process.cwd()),
     version: values.version === true,

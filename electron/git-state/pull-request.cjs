@@ -592,8 +592,11 @@ const normalizePullRequestFileStatus = (status) =>
 /** @param {PullRequestReference} pullRequest @param {GitHubPullRequestMetadata} metadata @returns {Extract<ReviewSource, {type: 'pull-request'}>} */
 const createPullRequestSource = (pullRequest, metadata) => ({
   headSha: metadata.head?.sha,
+  host: 'github.com',
   number: pullRequest.number,
   owner: pullRequest.owner,
+  projectPath: `${pullRequest.owner}/${pullRequest.repo}`,
+  provider: 'github',
   repo: pullRequest.repo,
   title: metadata.title,
   type: 'pull-request',

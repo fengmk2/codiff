@@ -574,7 +574,7 @@ function HistorySidebar({
         {
           key: 'history-section:pull-request',
           kind: 'section' as const,
-          label: hasScopedRows ? 'Pull request commits' : 'Branch history',
+          label: hasScopedRows ? 'Review commits' : 'Branch history',
         },
         ...pullRequestRows,
         { key: 'history-section:base', kind: 'section' as const, label: 'Base history' },

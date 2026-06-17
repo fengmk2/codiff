@@ -3,6 +3,7 @@
 const { execFileSync } = require('node:child_process');
 const { realpathSync } = require('node:fs');
 const { resolve } = require('node:path');
+const { parseReviewUrl } = require('./review-source.cjs');
 
 /**
  * @typedef {import('../core/types.ts').ReviewSource} ReviewSource
@@ -84,6 +85,12 @@ const parseGitHubPullRequestUrl = (value) => {
 
 /** @param {Extract<ReviewSource, {type: 'pull-request'}>} source */
 const getPullRequestSourceKey = (source) => {
+  const review = parseReviewUrl(source.url);
+  if (review?.provider === 'gitlab') {
+    return `pull-request:gitlab:${review.host}/${review.projectPath.toLowerCase()}#${
+      review.number
+    }`;
+  }
   const pullRequest =
     source.owner && source.repo && source.number
       ? {

@@ -171,6 +171,7 @@ test('parseArguments treats PR marker arguments as review sources', () => {
     commitRef: null,
     help: false,
     pullRequestNumber: 75,
+    pullRequestProvider: 'github',
     pullRequestUrl: null,
     requestedPath: resolve(process.cwd()),
     version: false,
@@ -238,10 +239,26 @@ test('parseArguments treats hash-prefixed PR marker values as review sources', (
     commitRef: null,
     help: false,
     pullRequestNumber: 75,
+    pullRequestProvider: 'github',
     pullRequestUrl: null,
     requestedPath: resolve(process.cwd()),
     version: false,
     walkthrough: false,
+  });
+});
+
+test('parseArguments treats GitLab MR marker values as review sources', () => {
+  expect(parseArguments(['mr', '23'])).toMatchObject({
+    pullRequestNumber: 23,
+    pullRequestProvider: 'gitlab',
+  });
+});
+
+test('parseArguments accepts nested GitLab merge request URLs', () => {
+  expect(
+    parseArguments(['https://gitlab.example.com/group/subgroup/project/-/merge_requests/23']),
+  ).toMatchObject({
+    pullRequestUrl: 'https://gitlab.example.com/group/subgroup/project/-/merge_requests/23',
   });
 });
 
@@ -255,6 +272,26 @@ test('resolvePullRequestUrl builds GitHub PR URLs from the origin remote', async
 
     expect(resolvePullRequestUrl(repositoryPath, 75)).toBe(
       'https://github.com/nkzw-tech/codiff/pull/75',
+    );
+  } finally {
+    await rm(repositoryPath, { force: true, recursive: true });
+  }
+});
+
+test('resolvePullRequestUrl builds GitLab MR URLs from an arbitrary GitLab remote', async () => {
+  const repositoryPath = await mkdtemp(join(tmpdir(), 'codiff-cli-'));
+
+  try {
+    await git(repositoryPath, ['init']);
+    await git(repositoryPath, [
+      'remote',
+      'add',
+      'origin',
+      'git@gitlab.example.com:group/subgroup/project.git',
+    ]);
+
+    expect(resolvePullRequestUrl(repositoryPath, 23, 'gitlab')).toBe(
+      'https://gitlab.example.com/group/subgroup/project/-/merge_requests/23',
     );
   } finally {
     await rm(repositoryPath, { force: true, recursive: true });
@@ -279,6 +316,27 @@ test('packaged terminal helper forwards --commit HEAD to Electron', async () => 
       '--commit',
       'HEAD',
       repositoryPath,
+    ]);
+  } finally {
+    await logger.cleanup();
+  }
+});
+
+test('packaged terminal helper forwards GitLab MR markers to Electron', async () => {
+  const logger = await createFakeOpenLogger();
+
+  try {
+    await execFileAsync(resolve('bin/codiff-app'), ['mr', '23'], {
+      env: logger.env,
+    });
+
+    expect(await logger.readArgs()).toEqual([
+      '-n',
+      resolve('bin/../../../..'),
+      '--args',
+      'mr',
+      '23',
+      process.cwd(),
     ]);
   } finally {
     await logger.cleanup();

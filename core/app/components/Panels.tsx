@@ -350,11 +350,11 @@ export function PullRequestReviewButtons({
   return (
     <>
       <button
-        aria-label="Approve pull request"
+        aria-label="Approve review"
         className="review-submit-button approve"
         disabled={disabled}
         onClick={() => onSubmitReview('APPROVE')}
-        title="Approve pull request"
+        title="Approve review"
         type="button"
       >
         <Check aria-hidden className="review-submit-icon approve" size={22} weight="bold" />

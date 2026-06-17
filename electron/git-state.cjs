@@ -31,6 +31,18 @@ const {
   submitPullRequestReview,
 } = require('./git-state/pull-request.cjs');
 const {
+  createGitLabPosition,
+  createMergeRequestFetchRefspecs,
+  listMergeRequestHistory,
+  normalizeGitLabReviewComment,
+  parseGitLabMergeRequestUrl,
+  readMergeRequestImageContent,
+  readMergeRequestState,
+  submitMergeRequestComment,
+  submitMergeRequestReview,
+} = require('./git-state/merge-request.cjs');
+const { parseReviewUrl } = require('./review-source.cjs');
+const {
   readDiffSectionContent: readWorkingTreeDiffSectionContent,
   readDiffImageContent: readWorkingTreeDiffImageContent,
   readGitIdentity,
@@ -51,7 +63,10 @@ const {
 const readRepositoryState = async (launchPath, source = { type: 'working-tree' }, options = {}) => {
   const state =
     source.type === 'pull-request'
-      ? await readPullRequestState(launchPath, source)
+      ? await (isGitLabReviewSource(source) ? readMergeRequestState : readPullRequestState)(
+          launchPath,
+          source,
+        )
       : source.type === 'commit'
         ? await readCommitState(launchPath, source.ref)
         : source.type === 'range'
@@ -66,6 +81,10 @@ const readRepositoryState = async (launchPath, source = { type: 'working-tree' }
   return { ...state, branch };
 };
 
+/** @param {Extract<ReviewSource, {type: 'pull-request'}>} source */
+const isGitLabReviewSource = (source) =>
+  source.provider === 'gitlab' || parseReviewUrl(source.url)?.provider === 'gitlab';
+
 /** @param {Extract<ReviewSource, {type: 'branch' | 'branch-diff'}>} source */
 const getBranchHistoryRef = (source) =>
   source.type === 'branch-diff' ? `${source.baseRef}..${source.headRef}` : `${source.ref}..HEAD`;
@@ -73,7 +92,11 @@ const getBranchHistoryRef = (source) =>
 /** @param {string} launchPath @param {number} [limit] @param {ReviewSource} [source] @returns {Promise<RepositoryHistory>} */
 const readRepositoryHistory = (launchPath, limit, source) =>
   source?.type === 'pull-request'
-    ? listPullRequestHistory(launchPath, source, limit)
+    ? (isGitLabReviewSource(source) ? listMergeRequestHistory : listPullRequestHistory)(
+        launchPath,
+        source,
+        limit,
+      )
     : listRepositoryHistory(
         launchPath,
         limit,
@@ -106,7 +129,9 @@ const readDiffSectionContent = async (launchPath, request) =>
 /** @param {string} launchPath @param {DiffImageContentRequest} request @returns {Promise<DiffImageContentResult>} */
 const readDiffImageContent = (launchPath, request) =>
   request.source?.type === 'pull-request'
-    ? readPullRequestImageContent(launchPath, request.source, request.path)
+    ? (isGitLabReviewSource(request.source)
+        ? readMergeRequestImageContent
+        : readPullRequestImageContent)(launchPath, request.source, request.path)
     : request.source?.type === 'range'
       ? readRangeImageContent(
           launchPath,
@@ -124,14 +149,18 @@ const readDiffImageContent = (launchPath, request) =>
 module.exports = {
   collectResolvedReviewCommentIds,
   createPullRequestHistoryFetchRefspecs,
+  createGitLabPosition,
+  createMergeRequestFetchRefspecs,
   createPullRequestSection,
   getPullRequestHeadImageSource,
   listRepositoryHistory: readRepositoryHistory,
   normalizeGitHubPullRequestCommit,
   normalizeGitHubReviewComment,
+  normalizeGitLabReviewComment,
   normalizePullRequestComment,
   parseStatus,
   parseGitHubPullRequestUrl,
+  parseGitLabMergeRequestUrl,
   selectUnresolvedReviewComments,
   readBranchState,
   readDiffSectionContent,
@@ -143,7 +172,15 @@ module.exports = {
   readRepositoryState,
   readWorkingTreeState,
   resolvePullRequestContentRefs,
-  submitPullRequestComment,
-  submitPullRequestReview,
+  submitPullRequestComment: (launchPath, request) =>
+    (isGitLabReviewSource(request.source) ? submitMergeRequestComment : submitPullRequestComment)(
+      launchPath,
+      request,
+    ),
+  submitPullRequestReview: (launchPath, request) =>
+    (isGitLabReviewSource(request.source) ? submitMergeRequestReview : submitPullRequestReview)(
+      launchPath,
+      request,
+    ),
   validateRepositoryPath,
 };

@@ -68,8 +68,11 @@ export type ReviewSource =
     }
   | {
       headSha?: string;
+      host?: string;
       number?: number;
       owner?: string;
+      projectPath?: string;
+      provider?: 'github' | 'gitlab';
       repo?: string;
       title?: string;
       type: 'pull-request';

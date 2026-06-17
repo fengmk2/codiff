@@ -40,7 +40,7 @@ const sourceCapabilitiesByType = {
     viewedFileState: false,
   },
   'pull-request': {
-    emptyTitle: 'No pull request changes',
+    emptyTitle: 'No review changes',
     historySource: true,
     lazyDiffContent: false,
     preloadDiffSearchContent: false,
@@ -78,7 +78,7 @@ export const getSourceKey = (source: ReviewSource) =>
         : source.type === 'range'
           ? `range:${rangeLabel(source)}`
           : source.type === 'pull-request'
-            ? `pull-request:${source.owner ?? ''}/${source.repo ?? ''}#${source.number ?? source.url}`
+            ? `pull-request:${source.provider ?? ''}:${source.host ?? ''}:${source.projectPath ?? `${source.owner ?? ''}/${source.repo ?? ''}`}#${source.number ?? source.url}`
             : 'working-tree';
 
 const getErrorMessage = (error: unknown) =>
@@ -109,8 +109,10 @@ export const getSourceLabel = (source: ReviewSource) =>
         ? rangeLabel(source)
         : source.type === 'pull-request'
           ? source.number
-            ? `PR #${source.number}`
-            : 'Pull request'
+            ? `${source.provider === 'gitlab' ? 'MR' : 'PR'} #${source.number}`
+            : source.provider === 'gitlab'
+              ? 'Merge request'
+              : 'Pull request'
           : 'Uncommitted';
 
 export const getHistorySource = (source: ReviewSource): ReviewSource | undefined =>

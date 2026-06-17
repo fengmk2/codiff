@@ -1,7 +1,7 @@
 import { CaretDownIcon as CaretDown } from '@phosphor-icons/react/CaretDown';
+import { ChatCircleIcon as ChatCircle } from '@phosphor-icons/react/ChatCircle';
 import { CheckIcon as Check } from '@phosphor-icons/react/Check';
 import { ColumnsIcon as Columns } from '@phosphor-icons/react/Columns';
-import { GithubLogoIcon as GithubLogo } from '@phosphor-icons/react/GithubLogo';
 import { ImageBrokenIcon as ImageBroken } from '@phosphor-icons/react/ImageBroken';
 import { SquareSplitVerticalIcon as SquareSplitVertical } from '@phosphor-icons/react/SquareSplitVertical';
 import { XIcon as X } from '@phosphor-icons/react/X';
@@ -305,10 +305,10 @@ const agentIconUrl = (agentId: 'codex' | 'claude' | 'pi') => {
 const canAskCodexForComment = (comment: ReviewComment) =>
   !comment.isReadOnly && comment.body.trim().length > 0 && comment.codexReply?.status !== 'loading';
 
-const canSubmitCommentToGitHub = (comment: ReviewComment) =>
+const canSubmitComment = (comment: ReviewComment) =>
   !comment.isReadOnly &&
   comment.body.trim().length > 0 &&
-  comment.githubSubmit?.status !== 'submitting';
+  comment.remoteSubmit?.status !== 'submitting';
 
 const withCommentBody = (comment: ReviewComment, body: string): ReviewComment =>
   comment.body === body ? comment : { ...comment, body };
@@ -669,7 +669,7 @@ function ReviewCommentEditor({
 
   const draftComment = withCommentBody(comment, draft);
   const canAskCodex = canAskCodexForComment(draftComment);
-  const canSubmitComment = canSubmitCommentToGitHub(draftComment);
+  const commentCanSubmit = canSubmitComment(draftComment);
   const flushDraft = useCallback(() => {
     setDraftState((current) =>
       current.commentId === comment.id
@@ -713,7 +713,7 @@ function ReviewCommentEditor({
 
   const handleSubmitComment = useCallback(() => {
     const flushed = flushDraft();
-    if (canSubmitCommentToGitHub(flushed)) {
+    if (canSubmitComment(flushed)) {
       onSubmitComment(comment.id);
     }
   }, [comment.id, flushDraft, onSubmitComment]);
@@ -729,7 +729,7 @@ function ReviewCommentEditor({
   const handleKeyDown = useCallback(
     (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
       if (matchesShortcut(event, keymap, 'submitComment')) {
-        if (isPullRequest && canSubmitComment) {
+        if (isPullRequest && commentCanSubmit) {
           event.preventDefault();
           event.stopPropagation();
           handleSubmitComment();
@@ -761,7 +761,7 @@ function ReviewCommentEditor({
     },
     [
       canAskCodex,
-      canSubmitComment,
+      commentCanSubmit,
       comment.id,
       comment.isReadOnly,
       draft,
@@ -808,20 +808,20 @@ function ReviewCommentEditor({
             {isPullRequest && !comment.isReadOnly ? (
               <button
                 className="review-comment-action"
-                disabled={!canSubmitComment}
+                disabled={!commentCanSubmit}
                 onClick={handleSubmitComment}
                 title={
-                  canSubmitComment ? 'Submit comment to GitHub' : 'Write a note before commenting'
+                  commentCanSubmit ? 'Submit review comment' : 'Write a note before commenting'
                 }
                 type="button"
               >
-                <GithubLogo
+                <ChatCircle
                   aria-hidden
                   className="review-comment-action-icon"
                   size={14}
                   weight="bold"
                 />
-                {comment.githubSubmit?.status === 'submitting' ? 'Sending' : 'Comment'}
+                {comment.remoteSubmit?.status === 'submitting' ? 'Sending' : 'Comment'}
               </button>
             ) : null}
             {!comment.isReadOnly ? (
@@ -850,8 +850,8 @@ function ReviewCommentEditor({
             spellCheck
             value={draft}
           />
-          {comment.githubSubmit?.status === 'error' ? (
-            <div className="review-comment-error">{comment.githubSubmit.error}</div>
+          {comment.remoteSubmit?.status === 'error' ? (
+            <div className="review-comment-error">{comment.remoteSubmit.error}</div>
           ) : null}
         </div>
       </div>

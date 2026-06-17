@@ -51,6 +51,7 @@ show_help() {
   printf '  %-22s%s%s%s\n' "codiff a1b2c3d" "$gray" "Review a specific commit." "$reset"
   printf '  %-22s%s%s%s\n' "codiff '#75'" "$gray" "Review pull request #75." "$reset"
   printf '  %-22s%s%s%s\n' "codiff pr 75" "$gray" "Review pull request #75 (alternate syntax)." "$reset"
+  printf '  %-22s%s%s%s\n' "codiff mr 75" "$gray" "Review GitLab merge request !75." "$reset"
   printf '  %-22s%s%s%s\n' "codiff -w" "$gray" "Start with an LLM narrative walkthrough." "$reset"
   printf '  %-22s%s%s%s\n' "codiff -w a1b2c3d" "$gray" "Walkthrough a specific commit." "$reset"
 }
@@ -63,6 +64,7 @@ agent_backend=""
 branch_ref=""
 commit_ref=""
 pull_request_source=""
+pull_request_provider=""
 source_ref=""
 walkthrough_context_path=""
 walkthrough_file_path=""
@@ -166,8 +168,9 @@ for arg in "$@"; do
   fi
 
   if [ "$expect_pull_request_number" -eq 1 ]; then
-    if printf '%s' "$arg" | grep -Eq '^[1-9][0-9]*$'; then
+    if printf '%s' "$arg" | grep -Eq '^#?[1-9][0-9]*$'; then
       pull_request_source="#$arg"
+      pull_request_source="$(printf '%s' "$pull_request_source" | tr -d '#')"
       expect_pull_request_number=0
       continue
     fi
@@ -250,10 +253,14 @@ for arg in "$@"; do
       ;;
     *)
       if [ -z "$pull_request_source" ] && printf '%s' "$arg" | grep -Eiq '^(pr|pull-request)$'; then
+        pull_request_provider="pr"
+        expect_pull_request_number=1
+      elif [ -z "$pull_request_source" ] && printf '%s' "$arg" | grep -Eiq '^(mr|merge-request)$'; then
+        pull_request_provider="mr"
         expect_pull_request_number=1
       elif [ -z "$pull_request_source" ] && printf '%s' "$arg" | grep -Eq '^#[1-9][0-9]*$'; then
         pull_request_source="$arg"
-      elif [ -z "$pull_request_source" ] && printf '%s' "$arg" | grep -Eq '^https://github\.com/[^/]+/[^/]+/pull/[0-9]+/?$'; then
+      elif [ -z "$pull_request_source" ] && printf '%s' "$arg" | grep -Eq '^https?://[^/]+/(.+/)?[^/]+/(-/merge_requests|pull)/[0-9]+/?$'; then
         pull_request_source="$arg"
       elif [ -z "$commit_ref" ] && [ -z "$branch_ref" ] && [ -z "$source_ref" ] && ! is_explicit_path_arg "$arg"; then
         source_ref="$arg"
@@ -328,7 +335,11 @@ open_codiff() {
   open -n "$app_path" --args "$@"
 }
 
-if [ -n "$pull_request_source" ] && [ "$walkthrough" -eq 1 ]; then
+if [ -n "$pull_request_source" ] && [ -n "$pull_request_provider" ] && [ "$walkthrough" -eq 1 ]; then
+  open_codiff --walkthrough "$pull_request_provider" "$pull_request_source" "$repository_path"
+elif [ -n "$pull_request_source" ] && [ -n "$pull_request_provider" ]; then
+  open_codiff "$pull_request_provider" "$pull_request_source" "$repository_path"
+elif [ -n "$pull_request_source" ] && [ "$walkthrough" -eq 1 ]; then
   open_codiff --walkthrough "$pull_request_source" "$repository_path"
 elif [ -n "$pull_request_source" ]; then
   open_codiff "$pull_request_source" "$repository_path"

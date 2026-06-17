@@ -5,6 +5,7 @@ const { existsSync } = require('node:fs');
 const { resolve } = require('node:path');
 const { parseArgs } = require('node:util');
 const { readWalkthroughContext } = require('../walkthrough-context.cjs');
+const { parseReviewUrl, resolveReviewUrl } = require('../review-source.cjs');
 
 /**
  * @typedef {import('../../core/types.ts').CodiffLaunchOptions} CodiffLaunchOptions
@@ -83,20 +84,15 @@ const parsePullRequestNumberValue = (value) => {
 };
 
 /** @param {string} arg */
-const isPullRequestMarkerArgument = (arg) => /^(?:pr|pull-request)$/i.test(arg);
+const getReviewProviderMarker = (arg) =>
+  /^(?:pr|pull-request)$/i.test(arg)
+    ? 'github'
+    : /^(?:mr|merge-request)$/i.test(arg)
+      ? 'gitlab'
+      : null;
 
 /** @param {string} arg */
-const isPullRequestUrlArgument = (arg) => {
-  try {
-    const url = new URL(arg);
-    return (
-      url.hostname.toLowerCase() === 'github.com' &&
-      /^\/[^/]+\/[^/]+\/pull\/\d+\/?$/.test(url.pathname)
-    );
-  } catch {
-    return false;
-  }
-};
+const isPullRequestUrlArgument = (arg) => parseReviewUrl(arg) != null;
 
 /** @param {string} value @returns {{owner: string; repo: string} | null} */
 const parseGitHubRemoteUrl = (value) => {
@@ -127,65 +123,9 @@ const parseGitHubRemoteUrl = (value) => {
   }
 };
 
-/** @param {string} repositoryPath @returns {Array<GitHubRemote>} */
-const readGitHubRemotes = (repositoryPath) => {
-  const repoRoot = execFileSync('git', ['-C', repositoryPath, 'rev-parse', '--show-toplevel'], {
-    encoding: 'utf8',
-  }).trim();
-  const raw = execFileSync('git', ['-C', repoRoot, 'remote', '-v'], { encoding: 'utf8' });
-  /** @type {Array<GitHubRemote>} */
-  const remotes = [];
-
-  for (const line of raw.split('\n')) {
-    const match = line.match(/^(\S+)\s+(\S+)\s+\((fetch|push)\)$/);
-    const remote = match ? parseGitHubRemoteUrl(match[2]) : null;
-    if (remote && match) {
-      remotes.push({
-        direction: match[3],
-        name: match[1],
-        ...remote,
-      });
-    }
-  }
-
-  return remotes;
-};
-
-/** @param {ReadonlyArray<GitHubRemote>} remotes */
-const selectGitHubRemote = (remotes) =>
-  [...remotes].sort((left, right) => {
-    /** @param {GitHubRemote} remote */
-    const getPriority = (remote) =>
-      remote.name === 'origin'
-        ? remote.direction === 'fetch'
-          ? 0
-          : 1
-        : remote.direction === 'fetch'
-          ? 2
-          : 3;
-    return getPriority(left) - getPriority(right);
-  })[0] ?? null;
-
 /** @param {string} repositoryPath @param {number} number */
-const resolvePullRequestUrl = (repositoryPath, number) => {
-  let remotes;
-  try {
-    remotes = readGitHubRemotes(repositoryPath);
-  } catch {
-    throw new Error(
-      `Could not resolve PR #${number}. Run codiff from inside a GitHub repository or pass a full GitHub pull request URL.`,
-    );
-  }
-
-  const remote = selectGitHubRemote(remotes);
-  if (!remote) {
-    throw new Error(
-      `Could not resolve PR #${number} because this repository has no GitHub remote.`,
-    );
-  }
-
-  return `https://github.com/${remote.owner}/${remote.repo}/pull/${number}`;
-};
+const resolvePullRequestUrl = (repositoryPath, number, provider) =>
+  resolveReviewUrl(repositoryPath, number, provider);
 
 /** @param {ReadonlyArray<string>} [commandLine] @returns {ParsedCommandLineArguments} */
 const parseCommandLineArguments = (commandLine = process.argv) => {
@@ -230,6 +170,7 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   let commitRef = typeof values.commit === 'string' ? values.commit : null;
   let branchRef = typeof values.branch === 'string' ? values.branch : null;
   let pullRequestNumber = null;
+  let pullRequestProvider = null;
   let pullRequestUrl = null;
   let repositoryPath = null;
   let sourceCandidate = null;
@@ -257,11 +198,13 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
         continue;
       }
 
-      const nextNumber = isPullRequestMarkerArgument(arg)
+      const markerProvider = getReviewProviderMarker(arg);
+      const nextNumber = markerProvider
         ? parsePullRequestNumberValue(positionals[index + 1] ?? '')
         : null;
       if (nextNumber != null) {
         pullRequestNumber = nextNumber;
+        pullRequestProvider = markerProvider;
         index += 1;
         continue;
       }
@@ -304,6 +247,7 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
     ? parsePullRequestNumberValue(process.env.CODIFF_PULL_REQUEST_NUMBER || '')
     : null;
   const envPullRequestUrl = useEnvironment ? process.env.CODIFF_PULL_REQUEST_URL || '' : '';
+  const envReviewProvider = useEnvironment ? process.env.CODIFF_REVIEW_PROVIDER || '' : '';
   const envCodexSessionId = useEnvironment ? process.env.CODIFF_CODEX_SESSION_ID || '' : '';
   const envClaudeSessionId = useEnvironment ? process.env.CODIFF_CLAUDE_SESSION_ID || '' : '';
   const envPiSessionId = useEnvironment ? process.env.CODIFF_PI_SESSION_ID || '' : '';
@@ -339,6 +283,10 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
     envWalkthroughFilePath ||
     undefined;
   const sourcePullRequestNumber = envPullRequestNumber ?? pullRequestNumber;
+  const sourceReviewProvider =
+    envReviewProvider === 'github' || envReviewProvider === 'gitlab'
+      ? envReviewProvider
+      : pullRequestProvider;
   const sourceRef = envCommitRef || commitRef;
   const sourceBranchRef = envBranchRef || branchRef;
   const sourceRange = envRange || range;
@@ -363,6 +311,9 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
             }
           : sourcePullRequestUrl
             ? {
+                ...(parseReviewUrl(sourcePullRequestUrl)?.provider
+                  ? { provider: parseReviewUrl(sourcePullRequestUrl).provider }
+                  : {}),
                 type: 'pull-request',
                 url: sourcePullRequestUrl,
               }
@@ -385,6 +336,7 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
       ...(walkthroughFilePath ? { walkthroughFile: resolve(walkthroughFilePath) } : {}),
     },
     pullRequestNumber: sourcePullRequestNumber,
+    ...(sourceReviewProvider ? { pullRequestProvider: sourceReviewProvider } : {}),
     repositoryPath,
   };
 };
@@ -395,7 +347,7 @@ const getCommandLineRepositoryPath = (commandLine = process.argv) =>
 
 /** @param {ReadonlyArray<string>} [commandLine] @param {string} [fallbackPath] @returns {CodiffLaunchOptions} */
 const getCommandLineLaunchOptions = (commandLine = process.argv, fallbackPath = process.cwd()) => {
-  const { launchOptions, pullRequestNumber, repositoryPath } =
+  const { launchOptions, pullRequestNumber, pullRequestProvider, repositoryPath } =
     parseCommandLineArguments(commandLine);
   if (pullRequestNumber == null || launchOptions.source) {
     return launchOptions;
@@ -412,7 +364,9 @@ const getCommandLineLaunchOptions = (commandLine = process.argv, fallbackPath = 
             fallbackPath,
         ),
         pullRequestNumber,
+        pullRequestProvider ?? undefined,
       ),
+      ...(pullRequestProvider ? { provider: pullRequestProvider } : {}),
     },
   };
 };

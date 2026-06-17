@@ -159,7 +159,7 @@
         "submitComment": {
           "type": "string",
           "default": "Mod+Enter",
-          "description": "Submit a review comment to GitHub or ask Codex."
+          "description": "Submit a remote review comment or ask Codex."
         },
         "discardComment": {
           "type": "string",

@@ -290,8 +290,27 @@ test('parses full GitHub pull request URLs as launch sources', () => {
     parseCommandLineArguments(['codiff', 'https://github.com/nkzw-tech/codiff/pull/11', '/repo'])
       .launchOptions.source,
   ).toEqual({
+    provider: 'github',
     type: 'pull-request',
     url: 'https://github.com/nkzw-tech/codiff/pull/11',
+  });
+});
+
+test('parses GitLab merge request markers and nested URLs', () => {
+  expect(parseCommandLineArguments(['codiff', 'mr', '23', '/repo'])).toMatchObject({
+    pullRequestNumber: 23,
+    pullRequestProvider: 'gitlab',
+  });
+  expect(
+    parseCommandLineArguments([
+      'codiff',
+      'https://gitlab.example.com/group/subgroup/project/-/merge_requests/23',
+      '/repo',
+    ]).launchOptions.source,
+  ).toEqual({
+    provider: 'gitlab',
+    type: 'pull-request',
+    url: 'https://gitlab.example.com/group/subgroup/project/-/merge_requests/23',
   });
 });
 

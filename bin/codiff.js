@@ -101,6 +101,7 @@ const run = async () => {
     commitRef,
     piSessionId,
     pullRequestNumber,
+    pullRequestProvider,
     range,
     requestedPath,
     walkthrough,
@@ -111,7 +112,11 @@ const run = async () => {
 
   if (!pullRequestUrl && pullRequestNumber != null) {
     try {
-      pullRequestUrl = resolvePullRequestUrl(requestedPath, pullRequestNumber);
+      pullRequestUrl = resolvePullRequestUrl(
+        requestedPath,
+        pullRequestNumber,
+        pullRequestProvider ?? undefined,
+      );
     } catch (error) {
       console.error(error instanceof Error ? error.message : String(error));
       process.exit(1);
@@ -137,6 +142,7 @@ const run = async () => {
     CODIFF_CODEX_SESSION_ID: codexSessionId ?? '',
     CODIFF_PI_SESSION_ID: piSessionId ?? '',
     CODIFF_PULL_REQUEST_URL: pullRequestUrl ?? '',
+    CODIFF_REVIEW_PROVIDER: pullRequestProvider ?? '',
     CODIFF_RANGE: range ? `${range.base}${range.symmetric ? '...' : '..'}${range.head}` : '',
     CODIFF_REPOSITORY_PATH: requestedPath,
     CODIFF_WALKTHROUGH: walkthrough ? '1' : '',

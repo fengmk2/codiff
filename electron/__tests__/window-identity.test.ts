@@ -152,6 +152,23 @@ test('window identities normalize GitHub pull request sources', async () => {
   }
 });
 
+test('window identities normalize GitLab merge request sources', async () => {
+  const repositoryPath = await createRepository();
+
+  try {
+    expect(
+      getWindowIdentity(repositoryPath, {
+        source: {
+          type: 'pull-request',
+          url: 'https://gitlab.example.com/group/subgroup/project/-/merge_requests/8',
+        },
+      })?.sourceKey,
+    ).toBe('pull-request:gitlab:gitlab.example.com/group/subgroup/project#8');
+  } finally {
+    await rm(repositoryPath, { force: true, recursive: true });
+  }
+});
+
 test('window identity matching requires exact identity matches', () => {
   expect(
     findMatchingWindowIdentity(

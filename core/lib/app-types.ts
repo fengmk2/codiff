@@ -95,14 +95,14 @@ export type ReviewComment = {
     status: 'error' | 'loading' | 'ready';
   };
   filePath: string;
-  githubSubmit?: {
-    error?: string;
-    status: 'error' | 'submitting';
-  };
   id: string;
   isOutdated?: boolean;
   isReadOnly?: boolean;
   lineNumber: number;
+  remoteSubmit?: {
+    error?: string;
+    status: 'error' | 'submitting';
+  };
   sectionId: string;
   side: 'additions' | 'deletions';
   startLineNumber?: number;

@@ -9,7 +9,7 @@ Codiff is a beautiful, minimal, local diff viewer for reviewing Git changes and 
 
 - **Fast Local Reviews:** Review and commit changes in any Git repository.
 - **LLM Walkthroughs:** Run `codiff -w` to generate an optimized commit walkthrough.
-- **Inline Review Comments:** Comment directly on Pull Requests or copy review comments as Markdown for follow-ups.
+- **Inline Review Comments:** Comment directly on GitHub pull requests and GitLab merge requests, or copy review comments as Markdown for follow-ups.
 
 ## Download
 
@@ -46,6 +46,17 @@ Review the current branch against a target branch:
 ```bash
 codiff main
 ```
+
+Review a GitHub pull request or GitLab merge request using the current repository remote:
+
+```bash
+codiff pr 75
+codiff mr 23
+```
+
+Full GitHub and GitLab review URLs are also supported. GitLab hosts and nested project paths are
+derived from the URL or local Git remote and authenticated through `glab`; Codiff does not require
+instance-specific configuration.
 
 Start with an LLM-generated narrative walkthrough:
 
