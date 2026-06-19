@@ -85,6 +85,59 @@ const glabApi = (repoRoot, mergeRequest, args, input) =>
     child.stdin.end(input == null ? undefined : JSON.stringify(input));
   });
 
+/** @param {string} value */
+const parseGlabJsonPages = (value) => {
+  const documents = [];
+  let depth = 0;
+  let escape = false;
+  let inString = false;
+  let start = -1;
+
+  for (let index = 0; index < value.length; index += 1) {
+    const character = value[index];
+    if (start === -1) {
+      if (/\s/.test(character)) {
+        continue;
+      }
+      if (character !== '[' && character !== '{') {
+        throw new SyntaxError(`Unexpected character in glab JSON output at position ${index}.`);
+      }
+      start = index;
+      depth = 1;
+      continue;
+    }
+
+    if (inString) {
+      if (escape) {
+        escape = false;
+      } else if (character === '\\') {
+        escape = true;
+      } else if (character === '"') {
+        inString = false;
+      }
+      continue;
+    }
+
+    if (character === '"') {
+      inString = true;
+    } else if (character === '[' || character === '{') {
+      depth += 1;
+    } else if (character === ']' || character === '}') {
+      depth -= 1;
+      if (depth === 0) {
+        documents.push(JSON.parse(value.slice(start, index + 1)));
+        start = -1;
+      }
+    }
+  }
+
+  if (start !== -1 || inString) {
+    throw new SyntaxError('Incomplete JSON document in glab output.');
+  }
+
+  return documents.flatMap((document) => (Array.isArray(document) ? document : [document]));
+};
+
 /** @param {{number: number; projectPath: string}} mergeRequest */
 const mergeRequestEndpoint = (mergeRequest, suffix = '') =>
   `projects/${encodeProjectPath(mergeRequest.projectPath)}/merge_requests/${
@@ -122,7 +175,7 @@ const readMergeRequestMetadata = async (repoRoot, mergeRequest) =>
 
 /** @param {string} repoRoot @param {ReturnType<typeof parseGitLabMergeRequestUrl>} mergeRequest */
 const readMergeRequestDiffs = async (repoRoot, mergeRequest) =>
-  JSON.parse(
+  parseGlabJsonPages(
     await glabApi(repoRoot, mergeRequest, [
       '--paginate',
       `${mergeRequestEndpoint(mergeRequest, '/diffs')}?per_page=100`,
@@ -180,7 +233,7 @@ const normalizeGitLabReviewComment = (note, url) => {
 
 /** @param {string} repoRoot @param {ReturnType<typeof parseGitLabMergeRequestUrl>} mergeRequest */
 const readMergeRequestComments = async (repoRoot, mergeRequest) => {
-  const discussions = JSON.parse(
+  const discussions = parseGlabJsonPages(
     await glabApi(repoRoot, mergeRequest, [
       '--paginate',
       `${mergeRequestEndpoint(mergeRequest, '/discussions')}?per_page=100`,
@@ -322,26 +375,42 @@ const normalizeGitLabCommit = (commit, scope) =>
     scope,
   );
 
+/** @param {string} repoRoot @param {any} mergeRequest @param {string} ref @param {number} limit */
+const readRepositoryCommits = async (repoRoot, mergeRequest, ref, limit) => {
+  const commits = [];
+  for (let page = 1; commits.length < limit; page += 1) {
+    const perPage = Math.min(limit - commits.length, 100);
+    const pageCommits = JSON.parse(
+      await glabApi(repoRoot, mergeRequest, [
+        `projects/${encodeProjectPath(mergeRequest.projectPath)}/repository/commits?ref_name=${encodeURIComponent(
+          ref,
+        )}&per_page=${perPage}&page=${page}`,
+      ]),
+    );
+    if (!Array.isArray(pageCommits) || pageCommits.length === 0) {
+      break;
+    }
+    commits.push(...pageCommits);
+    if (pageCommits.length < perPage) {
+      break;
+    }
+  }
+  return commits;
+};
+
 /** @param {string} launchPath @param {Extract<ReviewSource, {type: 'pull-request'}>} source @param {number} [limit] */
 const listMergeRequestHistory = async (launchPath, source, limit = 200) => {
   const repoRoot = (await git(launchPath, ['rev-parse', '--show-toplevel'])).trim();
   const mergeRequest = parseGitLabMergeRequestUrl(source.url);
   const metadata = await readMergeRequestMetadata(repoRoot, mergeRequest);
-  const commits = JSON.parse(
+  const commits = parseGlabJsonPages(
     await glabApi(repoRoot, mergeRequest, [
       '--paginate',
       `${mergeRequestEndpoint(mergeRequest, '/commits')}?per_page=100`,
     ]),
   );
   const baseCommits = metadata.target_branch
-    ? JSON.parse(
-        await glabApi(repoRoot, mergeRequest, [
-          '--paginate',
-          `projects/${encodeProjectPath(mergeRequest.projectPath)}/repository/commits?ref_name=${encodeURIComponent(
-            metadata.target_branch,
-          )}&per_page=${Math.min(limit, 100)}`,
-        ]),
-      )
+    ? await readRepositoryCommits(repoRoot, mergeRequest, metadata.target_branch, limit)
     : [];
   return {
     entries: [
@@ -528,6 +597,7 @@ module.exports = {
   getGitLabReviewQuickAction,
   listMergeRequestHistory,
   normalizeGitLabReviewComment,
+  parseGlabJsonPages,
   parseGitLabMergeRequestUrl,
   readMergeRequestImageContent,
   readMergeRequestState,

@@ -16,6 +16,7 @@ const {
   getGitLabReviewQuickAction,
   normalizeGitLabReviewComment,
   parseGitLabMergeRequestUrl,
+  parseGlabJsonPages,
 } = require('../../electron/git-state/merge-request.cjs') as {
   createGitLabDiffLineMap: (diff: string) => Map<string, { newLine?: number; oldLine?: number }>;
   createGitLabPosition: (
@@ -38,6 +39,7 @@ const {
     url: string,
   ) => Record<string, unknown> | null;
   parseGitLabMergeRequestUrl: (url: string) => Record<string, unknown>;
+  parseGlabJsonPages: (value: string) => ReadonlyArray<Record<string, unknown>>;
 };
 const { parseRemoteUrl } = require('../../electron/review-source.cjs') as {
   parseRemoteUrl: (url: string) => Record<string, unknown> | null;
@@ -76,6 +78,12 @@ describe('GitLab merge requests', () => {
       projectPath: 'group/subgroup/project',
       provider: 'gitlab',
     });
+  });
+
+  test('parses concatenated JSON arrays from paginated glab output', () => {
+    expect(
+      parseGlabJsonPages('[{"id":1,"body":"brackets ][ inside strings"}][{"id":2}]\n[{"id":3}]'),
+    ).toEqual([{ body: 'brackets ][ inside strings', id: 1 }, { id: 2 }, { id: 3 }]);
   });
 
   test('parses SSH remotes and preserves custom GitLab ports', () => {
