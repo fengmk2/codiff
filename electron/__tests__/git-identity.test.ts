@@ -49,3 +49,25 @@ test('prefers configured git identity and falls back to the current commit autho
     await rm(repo, { force: true, recursive: true });
   }
 });
+
+test('reads the global git identity outside a repository', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codiff-global-git-identity-'));
+  const globalConfig = join(directory, '.gitconfig');
+  const previousGlobalConfig = process.env.GIT_CONFIG_GLOBAL;
+  try {
+    await writeFile(globalConfig, '[user]\n\tname = Global User\n\temail = global@example.com\n');
+    process.env.GIT_CONFIG_GLOBAL = globalConfig;
+
+    await expect(readGitIdentity(directory)).resolves.toMatchObject({
+      email: 'global@example.com',
+      name: 'Global User',
+    });
+  } finally {
+    if (previousGlobalConfig == null) {
+      delete process.env.GIT_CONFIG_GLOBAL;
+    } else {
+      process.env.GIT_CONFIG_GLOBAL = previousGlobalConfig;
+    }
+    await rm(directory, { force: true, recursive: true });
+  }
+});

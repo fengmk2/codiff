@@ -1584,16 +1584,10 @@ ipcMain.handle('codiff:sharePlan', async (event, review) => {
 });
 
 ipcMain.handle('codiff:getFeatureFlags', async (event) => {
-  if (windowLaunchOptions.get(event.sender.id)?.planFile) {
-    return {
-      planSharing: Boolean(getPlanShareContext().target),
-      walkthroughSharing: false,
-    };
-  }
   const sharing = Boolean((await getWalkthroughShareContext(event.sender.id)).target);
   return {
     planSharing: sharing,
-    walkthroughSharing: sharing,
+    walkthroughSharing: windowLaunchOptions.get(event.sender.id)?.planFile ? false : sharing,
   };
 });
 
