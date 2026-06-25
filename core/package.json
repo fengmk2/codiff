@@ -12,7 +12,7 @@
     "./styles.css": "./App.css"
   },
   "dependencies": {
-    "@nkzw/mdx-editor": "0.1.1",
+    "@nkzw/mdx-editor": "0.1.2",
     "@phosphor-icons/react": "^2.1.10",
     "@pierre/diffs": "1.2.11",
     "@pierre/trees": "1.0.0-beta.4",

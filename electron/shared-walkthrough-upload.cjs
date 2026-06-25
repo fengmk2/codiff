@@ -82,7 +82,7 @@ const describeFetchError = (error, certificateTrust) => {
  *   uploader?: {email?: string; name?: string};
  * }} options
  */
-const uploadSharedWalkthrough = async ({
+const uploadSharedSnapshot = async ({
   authenticate = async () => {},
   fetchImpl = fetch,
   openClaimPage = true,
@@ -171,5 +171,6 @@ const uploadSharedWalkthrough = async ({
 };
 
 module.exports = {
-  uploadSharedWalkthrough,
+  uploadSharedSnapshot,
+  uploadSharedWalkthrough: uploadSharedSnapshot,
 };

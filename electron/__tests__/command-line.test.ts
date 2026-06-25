@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -75,6 +75,36 @@ test('parses the OpenCode agent override', () => {
       repositoryPathProvided: true,
     },
   });
+});
+
+test.sequential('plan command lines do not inspect Git refs', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codiff-plan-command-line-'));
+  const fakeBin = join(directory, 'bin');
+  const gitMarker = join(directory, 'git-invoked');
+  const planFile = join(directory, 'plan.md');
+  const previousPath = process.env.PATH;
+
+  try {
+    await mkdir(fakeBin);
+    await writeFile(planFile, '# Plan\n');
+    await writeFile(join(fakeBin, 'git'), `#!/bin/sh\nprintf invoked > "${gitMarker}"\nexit 99\n`);
+    await chmod(join(fakeBin, 'git'), 0o755);
+    process.env.PATH = `${fakeBin}:${previousPath ?? ''}`;
+
+    expect(
+      parseCommandLineArguments(['codiff', '--plan-file', planFile, 'workspace']),
+    ).toMatchObject({
+      launchOptions: {
+        planFile,
+        repositoryPathProvided: true,
+      },
+      repositoryPath: 'workspace',
+    });
+    expect(await readFile(gitMarker, 'utf8').catch(() => null)).toBeNull();
+  } finally {
+    process.env.PATH = previousPath;
+    await rm(directory, { force: true, recursive: true });
+  }
 });
 
 test('parses commit and walkthrough command-line options', () => {

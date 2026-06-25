@@ -111,6 +111,7 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
     throw new Error('Unexpected diff section load.');
   }),
   getFeatureFlags: vi.fn(async () => ({
+    planSharing: false,
     walkthroughSharing: false,
   })),
   getGitIdentity: vi.fn(async () => ({
@@ -198,6 +199,10 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
   setDiffStyle: vi.fn(async () => {}),
   setShowOutdated: vi.fn(async () => {}),
   setWordWrap: vi.fn(async () => {}),
+  sharePlan: vi.fn(async () => ({
+    status: 'uploaded' as const,
+    url: 'https://codiff.dev/p/test',
+  })),
   shareWalkthrough: vi.fn(async () => ({
     status: 'uploaded' as const,
     url: 'https://codiff.dev/w/test',
@@ -1264,6 +1269,10 @@ test('plan mode opens the Markdown editor without loading repository state', asy
   const getRepositoryState = vi.fn(async () => repositoryState);
   const completePlan = vi.fn(async (_review: PlanReview, _status: 'closed' | 'done') => {});
   const markPlanReady = vi.fn(async () => {});
+  const sharePlan = vi.fn(async (_review: PlanReview) => ({
+    status: 'uploaded' as const,
+    url: 'https://codiff.dev/p/shared-plan',
+  }));
   const originalScrollIntoView = HTMLElement.prototype.scrollIntoView;
   const scrollIntoView = vi.fn();
   HTMLElement.prototype.scrollIntoView = scrollIntoView;
@@ -1347,6 +1356,10 @@ test('plan mode opens the Markdown editor without loading repository state', asy
   } satisfies PlanReview;
   window.codiff = createCodiffMock({
     completePlan,
+    getFeatureFlags: vi.fn(async () => ({
+      planSharing: true,
+      walkthroughSharing: false,
+    })),
     getLaunchOptions: vi.fn(async () => ({
       planFile: '/tmp/plan.md',
       planResultFile: '/tmp/result.json',
@@ -1364,6 +1377,7 @@ test('plan mode opens the Markdown editor without loading repository state', asy
     getPlanReview: vi.fn(async () => storedReview),
     getRepositoryState,
     markPlanReady,
+    sharePlan,
   });
 
   const container = document.createElement('div');
@@ -1552,6 +1566,17 @@ test('plan mode opens the Markdown editor without loading repository state', asy
       deleteButtons[1]!.click();
     });
     expect(scrollIntoView).not.toHaveBeenCalled();
+
+    const shareButton = container.querySelector<HTMLButtonElement>('.plan-share-button');
+    expect(shareButton?.textContent).toContain('Share');
+    await act(async () => {
+      shareButton?.click();
+    });
+    await waitFor(() => {
+      expect(sharePlan).toHaveBeenCalledTimes(1);
+    });
+    expect(sharePlan.mock.calls[0]?.[0].threads).toHaveLength(1);
+    expect(shareButton?.textContent).toContain('Copied');
 
     await act(async () => {
       container.querySelector<HTMLButtonElement>('.plan-done-button')?.click();

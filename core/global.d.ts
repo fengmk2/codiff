@@ -20,6 +20,7 @@ import type {
   ReviewSource,
   SaveMarkdownDocumentRequest,
   SaveMarkdownDocumentResult,
+  SharePlanResult,
   SharedWalkthroughSnapshot,
   ShareWalkthroughResult,
   SubmitPullRequestCommentRequest,
@@ -88,6 +89,7 @@ declare global {
       setDiffStyle: (value: CodiffPreferences['diffStyle']) => Promise<void>;
       setShowOutdated: (value: boolean) => Promise<void>;
       setWordWrap: (value: boolean) => Promise<void>;
+      sharePlan: (review: PlanReview) => Promise<SharePlanResult>;
       shareWalkthrough: (snapshot: SharedWalkthroughSnapshot) => Promise<ShareWalkthroughResult>;
       showInFolder: (path: string) => Promise<void>;
       submitPullRequestComment: (

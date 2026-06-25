@@ -5,6 +5,7 @@ import {
   type MarkdownCommentTarget,
   type MarkdownEditorHandle,
 } from '@nkzw/mdx-editor';
+import { ShareNetworkIcon as ShareNetwork } from '@phosphor-icons/react/ShareNetwork';
 import { XIcon as X } from '@phosphor-icons/react/X';
 import {
   useCallback,
@@ -93,7 +94,7 @@ const getPlanCommentTargetLabel = (thread: PlanCommentThread) => {
   return `${entity} · ${excerpt}`;
 };
 
-function PlanCommentCard({
+export function PlanCommentCard({
   active,
   detached,
   identity,
@@ -104,6 +105,7 @@ function PlanCommentCard({
   onHeightChange,
   onReveal,
   readOnly,
+  showDelete,
   thread,
 }: {
   active: boolean;
@@ -116,6 +118,7 @@ function PlanCommentCard({
   onHeightChange: () => void;
   onReveal: () => void;
   readOnly: boolean;
+  showDelete: boolean;
   thread: PlanCommentThread;
 }) {
   const editorRef = useRef<MarkdownEditorHandle>(null);
@@ -149,7 +152,7 @@ function PlanCommentCard({
               <button
                 aria-label={`Show comment target: ${getPlanCommentTargetLabel(thread)}`}
                 className="plan-comment-target"
-                disabled={detached || readOnly}
+                disabled={detached}
                 onClick={onReveal}
                 title={
                   detached
@@ -161,16 +164,18 @@ function PlanCommentCard({
                 {getPlanCommentTargetLabel(thread)}
               </button>
             </div>
-            <button
-              aria-label="Delete comment"
-              className="review-comment-delete"
-              disabled={readOnly}
-              onClick={onDelete}
-              title="Delete comment"
-              type="button"
-            >
-              <X aria-hidden className="review-comment-delete-icon" size={14} weight="bold" />
-            </button>
+            {showDelete ? (
+              <button
+                aria-label="Delete comment"
+                className="review-comment-delete"
+                disabled={readOnly}
+                onClick={onDelete}
+                title="Delete comment"
+                type="button"
+              >
+                <X aria-hidden className="review-comment-delete-icon" size={14} weight="bold" />
+              </button>
+            ) : null}
           </div>
           <MarkdownEditor
             ariaLabel="Edit plan comment"
@@ -195,6 +200,7 @@ function PlanCommentCard({
             readOnly={readOnly}
             ref={editorRef}
             spellCheck
+            suppressHtmlProcessing={readOnly}
             value={body}
             variant="embedded"
           />
@@ -204,7 +210,7 @@ function PlanCommentCard({
   );
 }
 
-function PlanCommentRail({
+export function PlanCommentRail({
   activeThreadId,
   identity,
   layoutPass,
@@ -216,6 +222,7 @@ function PlanCommentRail({
   onHeightChange,
   onReveal,
   readOnly,
+  showDelete = true,
   threads,
   workspace,
 }: {
@@ -230,6 +237,7 @@ function PlanCommentRail({
   onHeightChange: () => void;
   onReveal: (thread: PlanCommentThread) => void;
   readOnly: boolean;
+  showDelete?: boolean;
   threads: ReadonlyArray<PlanCommentThread>;
   workspace: HTMLElement | null;
 }) {
@@ -327,6 +335,7 @@ function PlanCommentRail({
                 onHeightChange={onHeightChange}
                 onReveal={() => onReveal(thread)}
                 readOnly={readOnly}
+                showDelete={showDelete}
                 thread={thread}
               />
             </div>
@@ -339,11 +348,14 @@ function PlanCommentRail({
 
 export function PlanEditorView({
   document: initialDocument,
+  shareEnabled = false,
 }: {
   document: CodiffMarkdownDocument;
+  shareEnabled?: boolean;
 }) {
   const editorRef = useRef<MarkdownDocumentEditorHandle>(null);
   const completingRef = useRef(false);
+  const sharingRef = useRef(false);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const savePromiseRef = useRef<Promise<unknown>>(Promise.resolve());
   const reviewRef = useRef<PlanReview | null>(null);
@@ -364,6 +376,8 @@ export function PlanEditorView({
   const [layoutPass, setLayoutPass] = useState(0);
   const [review, setReview] = useState<PlanReview | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [shareCopied, setShareCopied] = useState(false);
+  const [sharing, setSharing] = useState(false);
   const [workspace, setWorkspace] = useState<HTMLDivElement | null>(null);
   const pathParts = document.path.split('/');
   const fileName = pathParts.at(-1);
@@ -501,7 +515,7 @@ export function PlanEditorView({
       immediate = false,
     ) => {
       const current = reviewRef.current;
-      if (!current || completingRef.current) {
+      if (!current || completingRef.current || sharingRef.current) {
         return;
       }
       persistReview(
@@ -520,7 +534,7 @@ export function PlanEditorView({
   const deleteThread = useCallback(
     (threadId: string) => {
       const current = reviewRef.current;
-      if (!current || completingRef.current) {
+      if (!current || completingRef.current || sharingRef.current) {
         return;
       }
       editorRef.current?.removeAnnotation(threadId);
@@ -538,7 +552,7 @@ export function PlanEditorView({
   const createComment = useCallback(
     (target?: MarkdownCommentTarget | null) => {
       const current = reviewRef.current;
-      if (!current || completingRef.current) {
+      if (!current || completingRef.current || sharingRef.current) {
         return;
       }
       const id = crypto.randomUUID();
@@ -582,26 +596,19 @@ export function PlanEditorView({
     [identity, persistReview],
   );
 
-  const completePlan = useCallback(async (status: PlanHandoffStatus) => {
-    if (completingRef.current || !reviewRef.current) {
-      return;
-    }
-    completingRef.current = true;
-    flushSync(() => {
-      setCompleting(true);
-      setCommentTarget(null);
-    });
+  const finalizeReview = useCallback(async () => {
     const saved = await (editorRef.current?.flush() ?? Promise.resolve(true));
     if (!saved) {
-      completingRef.current = false;
-      setCompleting(false);
-      return;
+      return null;
     }
     if (saveTimerRef.current) {
       clearTimeout(saveTimerRef.current);
       saveTimerRef.current = null;
     }
     const current = reviewRef.current;
+    if (!current) {
+      return null;
+    }
     const finalThreads = current.threads.filter(hasThreadContent);
     const finalThreadIds = new Set(finalThreads.map((thread) => thread.id));
     for (const thread of current.threads) {
@@ -620,16 +627,67 @@ export function PlanEditorView({
     reviewRef.current = finalReview;
     setReview(finalReview);
     setActiveThreadId((active) => (active && finalThreadIds.has(active) ? active : null));
+    await savePromiseRef.current.catch(() => {});
+    await window.codiff.savePlanReview(finalReview);
+    return finalReview;
+  }, []);
+
+  const completePlan = useCallback(
+    async (status: PlanHandoffStatus) => {
+      if (completingRef.current || sharingRef.current || !reviewRef.current) {
+        return;
+      }
+      completingRef.current = true;
+      flushSync(() => {
+        setCompleting(true);
+        setCommentTarget(null);
+      });
+      try {
+        const finalReview = await finalizeReview();
+        if (!finalReview) {
+          completingRef.current = false;
+          setCompleting(false);
+          return;
+        }
+        await window.codiff.completePlan(finalReview, status);
+      } catch (error) {
+        setSaveError(error instanceof Error ? error.message : String(error));
+        completingRef.current = false;
+        setCompleting(false);
+      }
+    },
+    [finalizeReview],
+  );
+
+  const sharePlan = useCallback(async () => {
+    if (sharingRef.current || completingRef.current || !reviewRef.current) {
+      return;
+    }
+    sharingRef.current = true;
+    flushSync(() => {
+      setSharing(true);
+      setShareCopied(false);
+      setCommentTarget(null);
+    });
     try {
-      await savePromiseRef.current.catch(() => {});
-      await window.codiff.savePlanReview(finalReview);
-      await window.codiff.completePlan(finalReview, status);
+      const finalReview = await finalizeReview();
+      if (!finalReview) {
+        return;
+      }
+      const result = await window.codiff.sharePlan(finalReview);
+      if (result.status === 'failed') {
+        throw new Error(result.reason);
+      }
+      setSaveError(null);
+      setShareCopied(true);
+      window.setTimeout(() => setShareCopied(false), 2000);
     } catch (error) {
       setSaveError(error instanceof Error ? error.message : String(error));
-      completingRef.current = false;
-      setCompleting(false);
+    } finally {
+      sharingRef.current = false;
+      setSharing(false);
     }
-  }, []);
+  }, [finalizeReview]);
 
   useEffect(
     () =>
@@ -749,14 +807,28 @@ export function PlanEditorView({
                     <span className="codiff-file-path">{fileName}</span>
                   </span>
                 </div>
-                <button
-                  className="codiff-open-button plan-done-button"
-                  disabled={completing}
-                  onClick={() => void completePlan('done')}
-                  type="button"
-                >
-                  {completing ? 'Saving…' : 'Done'}
-                </button>
+                <div className="plan-actions">
+                  {shareEnabled ? (
+                    <button
+                      className="codiff-open-button plan-share-button"
+                      disabled={completing || sharing}
+                      onClick={() => void sharePlan()}
+                      title="Share plan"
+                      type="button"
+                    >
+                      <ShareNetwork aria-hidden size={13} />
+                      {sharing ? 'Sharing…' : shareCopied ? 'Copied' : 'Share'}
+                    </button>
+                  ) : null}
+                  <button
+                    className="codiff-open-button plan-done-button"
+                    disabled={completing || sharing}
+                    onClick={() => void completePlan('done')}
+                    type="button"
+                  >
+                    {completing ? 'Saving…' : 'Done'}
+                  </button>
+                </div>
               </div>
               <MarkdownDocumentEditor
                 activeAnnotationId={activeThreadId}
@@ -765,7 +837,7 @@ export function PlanEditorView({
                 className="codiff-plan-editor"
                 document={document}
                 onAnnotationAnchorChange={(id, anchor) => {
-                  if (!anchor || completingRef.current) {
+                  if (!anchor || completingRef.current || sharingRef.current) {
                     return;
                   }
                   updateThread(
@@ -781,7 +853,7 @@ export function PlanEditorView({
                 onAnnotationLayoutChange={handleAnnotationLayoutChange}
                 onCommentTargetChange={handleCommentTargetChange}
                 onDocumentChange={handleDocumentChange}
-                readOnly={completing}
+                readOnly={completing || sharing}
                 ref={editorRef}
               />
             </div>
@@ -816,12 +888,12 @@ export function PlanEditorView({
               }}
               onHeightChange={() => setLayoutPass((pass) => pass + 1)}
               onReveal={revealThread}
-              readOnly={completing}
+              readOnly={completing || sharing}
               threads={review.threads}
               workspace={workspace}
             />
           ) : null}
-          {commentTarget && !completing ? (
+          {commentTarget && !completing && !sharing ? (
             <div
               className="plan-comment-affordance"
               data-mdx-comment-button=""

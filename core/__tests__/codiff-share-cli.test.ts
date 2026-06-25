@@ -1,8 +1,8 @@
 import { execFile } from 'node:child_process';
-import { chmod, mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:http';
 import { createRequire } from 'node:module';
-import { tmpdir } from 'node:os';
+import { tmpdir, userInfo } from 'node:os';
 import { join, resolve } from 'node:path';
 import { promisify } from 'node:util';
 import { expect, test } from 'vite-plus/test';
@@ -173,6 +173,119 @@ test('headless share uploads the canonical snapshot and prints its URL', async (
         title: 'Example update',
         version: 4,
       },
+    });
+  } finally {
+    await new Promise<void>((resolveClose) => server.close(() => resolveClose()));
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test('headless plan share works outside Git without invoking it', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codiff-headless-plan-share-'));
+  const fakeBin = join(directory, 'bin');
+  const gitMarker = join(directory, 'git-invoked');
+  const planFile = join(directory, 'plan.md');
+  type PlanUploadedBody = {
+    snapshot: {
+      document: { content: string; name: string; title: string };
+      kind: string;
+      review: { threads: ReadonlyArray<unknown>; version: number };
+      source?: { agent?: string; sessionId?: string };
+      version: number;
+    };
+    uploader: { email?: string; name: string };
+  };
+  let uploadedBody: PlanUploadedBody | null = null;
+
+  const server = createServer((request, response) => {
+    const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+    if (request.method === 'POST' && request.url === '/api/upload-intents') {
+      response.setHeader('content-type', 'application/json');
+      response.end(
+        JSON.stringify({
+          claimUrl: `${origin}/connect/CODE?secret=secret`,
+          code: 'CODE',
+          pollUrl: `${origin}/api/upload-intents/CODE?secret=secret`,
+          secret: 'secret',
+          status: 'claimed',
+        }),
+      );
+      return;
+    }
+
+    if (request.method === 'POST' && request.url === '/api/uploads') {
+      const chunks: Array<Buffer> = [];
+      request.on('data', (chunk) => chunks.push(chunk));
+      request.on('end', () => {
+        uploadedBody = JSON.parse(Buffer.concat(chunks).toString('utf8')) as PlanUploadedBody;
+        response.setHeader('content-type', 'application/json');
+        response.end(
+          JSON.stringify({
+            status: 'uploaded',
+            url: `${origin}/p/shared-plan`,
+          }),
+        );
+      });
+      return;
+    }
+
+    response.statusCode = 404;
+    response.end();
+  });
+
+  try {
+    await mkdir(fakeBin);
+    await writeFile(join(fakeBin, 'git'), `#!/bin/sh\nprintf invoked > "${gitMarker}"\nexit 99\n`);
+    await chmod(join(fakeBin, 'git'), 0o755);
+    await writeFile(planFile, '# Ship plan sharing\n\nKeep walkthroughs stable.\n');
+    await new Promise<void>((resolveListen) => {
+      server.listen(0, '127.0.0.1', resolveListen);
+    });
+    const origin = `http://127.0.0.1:${(server.address() as { port: number }).port}`;
+
+    const { stdout } = await execFileAsync(
+      process.execPath,
+      [
+        resolve('bin/share-codiff.mjs'),
+        '--plan',
+        planFile,
+        '--agent',
+        'codex',
+        '--codex-session',
+        'thread-id',
+      ],
+      {
+        cwd: directory,
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          CODIFF_SHARE_SERVER_URL: origin,
+          HOME: join(directory, 'home'),
+          PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
+        },
+      },
+    );
+
+    const body = uploadedBody as PlanUploadedBody | null;
+    expect(stdout.trim()).toBe(`${origin}/p/shared-plan`);
+    expect(body?.uploader).toEqual({ name: userInfo().username });
+    expect(await readFile(gitMarker, 'utf8').catch(() => null)).toBeNull();
+    expect(body?.snapshot).toMatchObject({
+      document: {
+        content: '# Ship plan sharing\n\nKeep walkthroughs stable.\n',
+        name: 'plan.md',
+        title: 'Ship plan sharing',
+      },
+      kind: 'codiff-plan-share',
+      review: {
+        threads: [],
+        version: 1,
+      },
+      source: {
+        agent: 'codex',
+        sessionId: 'thread-id',
+      },
+      version: 1,
     });
   } finally {
     await new Promise<void>((resolveClose) => server.close(() => resolveClose()));

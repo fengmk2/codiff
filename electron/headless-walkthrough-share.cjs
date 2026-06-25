@@ -14,13 +14,70 @@ const {
   normalizeNarrativeWalkthrough,
   readNarrativeWalkthrough,
 } = require('./narrative-walkthrough.cjs');
-const { uploadSharedWalkthrough } = require('./shared-walkthrough-upload.cjs');
+const { uploadSharedSnapshot } = require('./shared-walkthrough-upload.cjs');
 const { mergeWalkthroughContexts, readWalkthroughContext } = require('./walkthrough-context.cjs');
 const { resolveWalkthroughShareTarget } = require('./walkthrough-sharing.cjs');
 
 /**
  * @typedef {import('../core/types.ts').ReviewSource} ReviewSource
  */
+
+/**
+ * @param {{
+ *   codiffVersion: string;
+ *   openExternal: (url: string) => Promise<void>;
+ *   serviceUrlOverride?: string;
+ *   snapshot: Record<string, unknown>;
+ *   target?: {authenticated: boolean; internal: boolean; serviceUrl: string};
+ *   uploader: {email?: string; name?: string};
+ * }} options
+ */
+const uploadSnapshot = async ({
+  codiffVersion,
+  openExternal,
+  serviceUrlOverride,
+  snapshot,
+  target: targetOverride,
+  uploader,
+}) => {
+  let username = '';
+  try {
+    username = userInfo().username;
+  } catch {}
+
+  const target =
+    targetOverride ||
+    resolveWalkthroughShareTarget({
+      email: uploader.email,
+      overrideUrl: serviceUrlOverride,
+      username,
+    });
+  if (!target) {
+    throw new Error('Sharing is not available for this user.');
+  }
+
+  const accessClient = target.authenticated
+    ? createCloudflareAccessClient({ serviceUrl: target.serviceUrl })
+    : null;
+
+  try {
+    return await uploadSharedSnapshot({
+      authenticate: accessClient?.authenticate,
+      fetchImpl: accessClient?.fetch,
+      openClaimPage: false,
+      openExternal,
+      serviceUrl: target.serviceUrl,
+      snapshot: {
+        ...snapshot,
+        codiffVersion,
+        exportedAt: new Date().toISOString(),
+      },
+      uploader: target.internal ? uploader : undefined,
+    });
+  } finally {
+    accessClient?.clear();
+  }
+};
 
 /**
  * @param {{
@@ -41,61 +98,34 @@ const uploadWalkthrough = async ({
   state,
   uploader,
   walkthrough,
-}) => {
-  let username = '';
-  try {
-    username = userInfo().username;
-  } catch {}
-
-  const target = resolveWalkthroughShareTarget({
-    email: uploader.email,
-    overrideUrl: serviceUrlOverride,
-    username,
-  });
-  if (!target) {
-    throw new Error('Walkthrough sharing is not available for this user.');
-  }
-
-  const accessClient = target.authenticated
-    ? createCloudflareAccessClient({ serviceUrl: target.serviceUrl })
-    : null;
-
-  try {
-    return await uploadSharedWalkthrough({
-      authenticate: accessClient?.authenticate,
-      fetchImpl: accessClient?.fetch,
-      openClaimPage: false,
-      openExternal,
-      serviceUrl: target.serviceUrl,
-      snapshot: {
-        branch: state.branch,
-        codiffVersion,
-        exportedAt: new Date().toISOString(),
-        files: state.files,
-        kind: 'codiff-walkthrough-share',
-        preferences: {
-          codeFontFamily: config.settings.codeFontFamily,
-          codeFontSize: config.settings.codeFontSize,
-          diffStyle: config.settings.diffStyle,
-          showWhitespace: config.settings.showWhitespace,
-          theme: config.settings.theme,
-          wordWrap: config.settings.wordWrap,
-        },
-        repository: {
-          root: state.root,
-          source: state.source,
-          title: state.source.type === 'commit' ? state.commitMetadata?.subject : undefined,
-        },
-        reviewComments: state.reviewComments,
-        version: 1,
-        walkthrough,
+}) =>
+  uploadSnapshot({
+    codiffVersion,
+    openExternal,
+    serviceUrlOverride,
+    snapshot: {
+      branch: state.branch,
+      files: state.files,
+      kind: 'codiff-walkthrough-share',
+      preferences: {
+        codeFontFamily: config.settings.codeFontFamily,
+        codeFontSize: config.settings.codeFontSize,
+        diffStyle: config.settings.diffStyle,
+        showWhitespace: config.settings.showWhitespace,
+        theme: config.settings.theme,
+        wordWrap: config.settings.wordWrap,
       },
-      uploader: target.internal ? uploader : undefined,
-    });
-  } finally {
-    accessClient?.clear();
-  }
-};
+      repository: {
+        root: state.root,
+        source: state.source,
+        title: state.source.type === 'commit' ? state.commitMetadata?.subject : undefined,
+      },
+      reviewComments: state.reviewComments,
+      version: 1,
+      walkthrough,
+    },
+    uploader,
+  });
 
 /**
  * @param {string} repositoryPath
@@ -247,4 +277,5 @@ const generateAndShareWalkthrough = async ({
 module.exports = {
   generateAndShareWalkthrough,
   shareWalkthroughFile,
+  uploadSnapshot,
 };

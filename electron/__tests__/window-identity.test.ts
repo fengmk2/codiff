@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { chmod, mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -30,6 +30,8 @@ const { findMatchingWindowIdentity, getWindowIdentity, parseGitHubPullRequestUrl
             };
         walkthrough?: boolean;
         walkthroughFile?: string;
+        planFile?: string;
+        planResultFile?: string;
       },
     ) => { key: string; repositoryRoot: string; sourceKey: string } | null;
     parseGitHubPullRequestUrl: (value: string) => {
@@ -54,6 +56,38 @@ const createRepository = async () => {
   await git(repositoryPath, ['commit', '--allow-empty', '-m', 'initial']);
   return repositoryPath;
 };
+
+test.sequential('plan window identities do not invoke Git outside repositories', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codiff-plan-window-identity-'));
+  const fakeBin = join(directory, 'bin');
+  const gitMarker = join(directory, 'git-invoked');
+  const planFile = join(directory, 'plan.md');
+  const previousPath = process.env.PATH;
+
+  try {
+    await mkdir(fakeBin);
+    await writeFile(join(fakeBin, 'git'), `#!/bin/sh\nprintf invoked > "${gitMarker}"\nexit 99\n`);
+    await chmod(join(fakeBin, 'git'), 0o755);
+    await writeFile(planFile, '# Plan\n');
+    process.env.PATH = `${fakeBin}:${previousPath ?? ''}`;
+    const realDirectory = await realpath(directory);
+    const realPlanFile = await realpath(planFile);
+
+    expect(
+      getWindowIdentity(directory, {
+        planFile,
+        planResultFile: join(directory, 'result.json'),
+      }),
+    ).toMatchObject({
+      repositoryRoot: realDirectory,
+      sourceKey: `plan:${realPlanFile}`,
+    });
+    expect(await readFile(gitMarker, 'utf8').catch(() => null)).toBeNull();
+  } finally {
+    process.env.PATH = previousPath;
+    await rm(directory, { force: true, recursive: true });
+  }
+});
 
 test('window identities match working-tree launches inside the same repository', async () => {
   const repositoryPath = await createRepository();

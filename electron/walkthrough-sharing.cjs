@@ -37,6 +37,17 @@ const resolveWalkthroughShareTarget = ({ email, overrideUrl, username }) => {
   return null;
 };
 
+/** @param {{overrideUrl?: string}} options */
+const resolvePlanShareTarget = ({ overrideUrl }) => {
+  const serviceUrlOverride = overrideUrl?.trim().replace(/\/+$/, '');
+  return {
+    authenticated: !serviceUrlOverride,
+    internal: true,
+    serviceUrl: serviceUrlOverride || CLOUDFLARE_SHARE_SERVER_URL,
+  };
+};
+
 module.exports = {
+  resolvePlanShareTarget,
   resolveWalkthroughShareTarget,
 };

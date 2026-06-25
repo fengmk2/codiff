@@ -18,6 +18,7 @@ const {
   generateAndShareWalkthrough,
   shareWalkthroughFile,
 } = require('../electron/headless-walkthrough-share.cjs');
+const { sharePlanFile } = require('../electron/headless-plan-share.cjs');
 
 // The renderer is the built dist/ by default. When Codiff's own Vite dev server
 // is running, use it instead so source edits hot-reload without a rebuild. The
@@ -141,12 +142,6 @@ const run = async () => {
     process.exitCode = 1;
     return;
   }
-  if (planFilePath && share) {
-    process.stderr.write('codiff: --plan cannot be combined with --share.\n');
-    process.exitCode = 1;
-    return;
-  }
-
   if (!pullRequestUrl && pullRequestNumber != null) {
     try {
       pullRequestUrl = resolvePullRequestUrl(
@@ -161,6 +156,32 @@ const run = async () => {
   }
 
   if (share) {
+    if (planFilePath) {
+      const sessionId =
+        agentBackend === 'claude'
+          ? claudeSessionId
+          : agentBackend === 'opencode'
+            ? opencodeSessionId
+            : agentBackend === 'pi'
+              ? piSessionId
+              : codexSessionId;
+      try {
+        const url = await sharePlanFile({
+          agent: agentBackend ?? undefined,
+          codiffVersion: packageJson.version,
+          openExternal,
+          planFile: planFilePath,
+          serviceUrlOverride: process.env.CODIFF_SHARE_SERVER_URL,
+          sessionId: sessionId ?? undefined,
+        });
+        process.stdout.write(`${url}\n`);
+      } catch (error) {
+        process.stderr.write(`${error instanceof Error ? error.message : String(error)}\n`);
+        process.exitCode = 1;
+      }
+      return;
+    }
+
     const source = range
       ? {
           base: range.base,

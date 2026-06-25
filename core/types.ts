@@ -151,6 +151,7 @@ export type RepositoryState = {
 };
 
 export type CodiffFeatureFlags = {
+  planSharing: boolean;
   walkthroughSharing: boolean;
 };
 
@@ -236,7 +237,28 @@ export type SharedWalkthroughSnapshot = {
   walkthrough: NarrativeWalkthrough;
 };
 
-export type ShareWalkthroughResult =
+export type SharedPlanSnapshot = {
+  codiffVersion: string;
+  document: {
+    content: string;
+    name: string;
+    title: string;
+  };
+  exportedAt: string;
+  kind: 'codiff-plan-share';
+  preferences: Pick<CodiffPreferences, 'theme'>;
+  review: {
+    threads: ReadonlyArray<PlanCommentThread>;
+    version: 1;
+  };
+  source?: {
+    agent?: 'claude' | 'codex' | 'opencode' | 'pi';
+    sessionId?: string;
+  };
+  version: 1;
+};
+
+export type ShareResult =
   | {
       status: 'uploaded';
       url: string;
@@ -245,6 +267,9 @@ export type ShareWalkthroughResult =
       reason: string;
       status: 'failed';
     };
+
+export type SharePlanResult = ShareResult;
+export type ShareWalkthroughResult = ShareResult;
 
 export type WalkthroughContext = {
   changedFiles?: ReadonlyArray<{

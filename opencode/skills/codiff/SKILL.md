@@ -15,13 +15,16 @@ change. Codiff owns the format and authoring guidance, so this skill only handle
 
 ## Choose The Mode
 
-- Use **share mode** when the request includes `share`, `upload`, `link`, `URL`, `web`, or
-  browser wording, including `$codiff share`.
+- Use **plan share mode** for `$codiff plan share`, or when a share request is clearly about the
+  proposed plan in the current discussion.
+- Use **walkthrough share mode** when the request includes `share`, `upload`, `link`, `URL`, `web`,
+  or browser wording and is about code changes. An underspecified `$codiff share` defaults to a
+  walkthrough.
 - Use **plan mode** for `$codiff plan` or when the user explicitly asks to edit or approve a
   plan in Codiff before execution.
 - Use **desktop mode** for plain `$codiff`, `/codiff`, "open Codiff", or "show me Codiff".
-- In share mode, only pass `--open` when the user explicitly asks to open the resulting
-  walkthrough in a browser. Otherwise return the URL without opening it.
+- In share mode, only pass `--open` when the user explicitly asks to open the resulting share in
+  a browser. Otherwise return the URL without opening it.
 
 ## Plan Mode
 
@@ -49,6 +52,18 @@ change. Codiff owns the format and authoring guidance, so this skill only handle
 
 The edited Markdown file is the feedback. Do not require comments, annotations, or a separate
 approval document.
+
+## Plan Share Mode
+
+1. Write the complete plan to a Markdown file, using the same authoring rules as plan mode.
+2. Upload it without opening a blocking desktop handoff:
+
+   ```bash
+   node scripts/open-codiff.mjs --plan /tmp/codiff-plan-<id>.md --share
+   ```
+
+3. Add `--open` only when the user explicitly asks to open the shared plan in a browser.
+4. Return only the `/p/…` URL printed by the command.
 
 ## Walkthrough Workflow
 
@@ -108,5 +123,6 @@ approval document.
    are pinned to a real section rather than dropped.
 
 Emit walkthrough JSON only into the temporary file. In desktop walkthrough mode, do not
-summarize the conversation back to the user. In share mode, respond with the URL printed by the
-command. In plan mode, continue from the edited Markdown after the blocking handoff returns.
+summarize the conversation back to the user. In walkthrough share mode, respond with the URL
+printed by the command. In plan share mode, respond with the shared plan URL. In plan mode,
+continue from the edited Markdown after the blocking handoff returns.

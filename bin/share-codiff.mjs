@@ -10,6 +10,7 @@ import { parseArguments, resolvePullRequestUrl } from './arguments.js';
 
 const require = createRequire(import.meta.url);
 const { shareWalkthroughFile } = require('../electron/headless-walkthrough-share.cjs');
+const { sharePlanFile } = require('../electron/headless-plan-share.cjs');
 
 const openExternal = (url) =>
   new Promise((resolveOpen, reject) => {
@@ -31,6 +32,7 @@ const openExternal = (url) =>
 const rawArgs = process.argv.slice(2);
 const forwardedArgs = [];
 let openResult = false;
+let planFile = '';
 let walkthroughFile = '';
 
 for (let index = 0; index < rawArgs.length; index += 1) {
@@ -44,6 +46,15 @@ for (let index = 0; index < rawArgs.length; index += 1) {
     walkthroughFile = arg.slice('--file='.length);
     continue;
   }
+  if (arg === '--plan') {
+    planFile = rawArgs[index + 1] || '';
+    index += 1;
+    continue;
+  }
+  if (arg.startsWith('--plan=')) {
+    planFile = arg.slice('--plan='.length);
+    continue;
+  }
   if (arg === '--open') {
     openResult = true;
     continue;
@@ -51,14 +62,19 @@ for (let index = 0; index < rawArgs.length; index += 1) {
   forwardedArgs.push(arg);
 }
 
-if (!walkthroughFile) {
-  process.stderr.write('share-codiff: missing --file <path> to the walkthrough JSON.\n');
+if (!walkthroughFile && !planFile) {
+  process.stderr.write('share-codiff: missing --file <path> or --plan <path>.\n');
   process.exit(1);
 }
 
-const walkthroughFilePath = resolve(walkthroughFile);
-if (!existsSync(walkthroughFilePath)) {
+const walkthroughFilePath = walkthroughFile ? resolve(walkthroughFile) : '';
+const planFilePath = planFile ? resolve(planFile) : '';
+if (walkthroughFilePath && !existsSync(walkthroughFilePath)) {
   process.stderr.write(`share-codiff: walkthrough file not found at ${walkthroughFilePath}.\n`);
+  process.exit(1);
+}
+if (planFilePath && (!existsSync(planFilePath) || !/\.md$/i.test(planFilePath))) {
+  process.stderr.write(`share-codiff: plan file not found or not Markdown: ${planFilePath}.\n`);
   process.exit(1);
 }
 
@@ -92,15 +108,32 @@ const source = parsed.range
         : { type: 'working-tree' };
 
 try {
-  const url = await shareWalkthroughFile({
-    agent: parsed.agentBackend ?? undefined,
-    codiffVersion: packageJson.version,
-    openExternal,
-    repositoryPath: parsed.requestedPath,
-    serviceUrlOverride: process.env.CODIFF_SHARE_SERVER_URL,
-    source,
-    walkthroughFile: walkthroughFilePath,
-  });
+  const sessionId =
+    parsed.agentBackend === 'claude'
+      ? parsed.claudeSessionId
+      : parsed.agentBackend === 'opencode'
+        ? parsed.opencodeSessionId
+        : parsed.agentBackend === 'pi'
+          ? parsed.piSessionId
+          : parsed.codexSessionId;
+  const url = planFilePath
+    ? await sharePlanFile({
+        agent: parsed.agentBackend ?? undefined,
+        codiffVersion: packageJson.version,
+        openExternal,
+        planFile: planFilePath,
+        serviceUrlOverride: process.env.CODIFF_SHARE_SERVER_URL,
+        sessionId: sessionId ?? undefined,
+      })
+    : await shareWalkthroughFile({
+        agent: parsed.agentBackend ?? undefined,
+        codiffVersion: packageJson.version,
+        openExternal,
+        repositoryPath: parsed.requestedPath,
+        serviceUrlOverride: process.env.CODIFF_SHARE_SERVER_URL,
+        source,
+        walkthroughFile: walkthroughFilePath,
+      });
   if (openResult) {
     await openExternal(url);
   }

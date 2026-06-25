@@ -81,8 +81,11 @@ const {
   normalizeNarrativeWalkthrough,
   readNarrativeWalkthrough,
 } = require('./narrative-walkthrough.cjs');
-const { uploadSharedWalkthrough } = require('./shared-walkthrough-upload.cjs');
-const { resolveWalkthroughShareTarget } = require('./walkthrough-sharing.cjs');
+const { uploadSharedSnapshot } = require('./shared-walkthrough-upload.cjs');
+const {
+  resolvePlanShareTarget,
+  resolveWalkthroughShareTarget,
+} = require('./walkthrough-sharing.cjs');
 const { createCloudflareAccessClient } = require('./cloudflare-access.cjs');
 const { mergeWalkthroughContexts } = require('./walkthrough-context.cjs');
 const {
@@ -97,6 +100,8 @@ const {
   repositoryWatcherSnapshotsMatchExpectedWrites,
 } = require('./repository-watcher.cjs');
 const { readPlanReview, writePlanReview } = require('./plan-review.cjs');
+const { createSharedPlanSnapshot } = require('./shared-plan.cjs');
+const { readLocalIdentity } = require('./local-identity.cjs');
 
 /**
  * @typedef {import('../core/config/types.ts').CodiffConfig} CodiffConfig
@@ -1138,6 +1143,60 @@ const getWalkthroughShareContext = async (webContentsId) => {
   };
 };
 
+const getPlanShareContext = () => {
+  const uploader = readLocalIdentity();
+  return {
+    target: resolvePlanShareTarget({
+      overrideUrl: process.env.CODIFF_SHARE_SERVER_URL,
+    }),
+    uploader,
+  };
+};
+
+/**
+ * @param {Promise<{target: {authenticated: boolean; internal: boolean; serviceUrl: string} | null; uploader: {email?: string; name?: string}}> | {target: {authenticated: boolean; internal: boolean; serviceUrl: string} | null; uploader: {email?: string; name?: string}}} context
+ * @param {Record<string, unknown>} snapshot
+ */
+const shareSnapshot = async (context, snapshot) => {
+  /** @type {ReturnType<typeof createCloudflareAccessClient> | null} */
+  let accessClient = null;
+  try {
+    const { target, uploader } = await context;
+    if (!target) {
+      return {
+        reason: 'Sharing is not available for this user.',
+        status: /** @type {const} */ ('failed'),
+      };
+    }
+    if (target.authenticated) {
+      accessClient = createCloudflareAccessClient({
+        serviceUrl: target.serviceUrl,
+      });
+    }
+    const url = await uploadSharedSnapshot({
+      authenticate: accessClient?.authenticate,
+      fetchImpl: accessClient?.fetch,
+      openExternal: (url) => shell.openExternal(url),
+      serviceUrl: target.serviceUrl,
+      snapshot: {
+        ...snapshot,
+        codiffVersion: app.getVersion(),
+        exportedAt: new Date().toISOString(),
+      },
+      uploader: target.internal ? uploader : undefined,
+    });
+    clipboard.writeText(url);
+    return { status: /** @type {const} */ ('uploaded'), url };
+  } catch (error) {
+    return {
+      reason: error instanceof Error ? error.message : String(error),
+      status: /** @type {const} */ ('failed'),
+    };
+  } finally {
+    accessClient?.clear();
+  }
+};
+
 /**
  * @param {string} repositoryPath
  * @param {CodiffLaunchOptions} [launchOptions]
@@ -1493,48 +1552,50 @@ ipcMain.handle('codiff:getNarrativeWalkthrough', async (event, source) => {
 });
 
 ipcMain.handle('codiff:shareWalkthrough', async (event, snapshot) => {
-  /** @type {ReturnType<typeof createCloudflareAccessClient> | null} */
-  let accessClient = null;
-  try {
-    const { target, uploader } = await getWalkthroughShareContext(event.sender.id);
-    if (!target) {
-      return {
-        reason: 'Walkthrough sharing is not available for this user.',
-        status: 'failed',
-      };
-    }
-    if (target.authenticated) {
-      accessClient = createCloudflareAccessClient({
-        serviceUrl: target.serviceUrl,
-      });
-    }
-    const url = await uploadSharedWalkthrough({
-      authenticate: accessClient?.authenticate,
-      fetchImpl: accessClient?.fetch,
-      openExternal: (url) => shell.openExternal(url),
-      serviceUrl: target.serviceUrl,
-      snapshot: {
-        ...snapshot,
-        codiffVersion: app.getVersion(),
-        exportedAt: new Date().toISOString(),
-      },
-      uploader: target.internal ? uploader : undefined,
-    });
-    clipboard.writeText(url);
-    return { status: 'uploaded', url };
-  } catch (error) {
-    return {
-      reason: error instanceof Error ? error.message : String(error),
-      status: 'failed',
-    };
-  } finally {
-    accessClient?.clear();
-  }
+  return shareSnapshot(getWalkthroughShareContext(event.sender.id), snapshot);
 });
 
-ipcMain.handle('codiff:getFeatureFlags', async (event) => ({
-  walkthroughSharing: Boolean((await getWalkthroughShareContext(event.sender.id)).target),
-}));
+ipcMain.handle('codiff:sharePlan', async (event, review) => {
+  const launchOptions = windowLaunchOptions.get(event.sender.id);
+  if (!launchOptions?.planFile) {
+    return {
+      reason: 'This window does not have a plan document.',
+      status: 'failed',
+    };
+  }
+  const document = await readMarkdownDocument(
+    { kind: 'plan', path: launchOptions.planFile },
+    getMarkdownDocumentContext(event.sender.id),
+  );
+  const agent = resolveWindowAgent(event.sender.id);
+  const sessionId = launchOptions[agent.sessionLaunchOptionKey];
+  return shareSnapshot(
+    getPlanShareContext(),
+    createSharedPlanSnapshot({
+      agent: agent.id,
+      codiffVersion: app.getVersion(),
+      content: document.content,
+      filePath: launchOptions.planFile,
+      review,
+      sessionId,
+      theme: config.settings.theme,
+    }),
+  );
+});
+
+ipcMain.handle('codiff:getFeatureFlags', async (event) => {
+  if (windowLaunchOptions.get(event.sender.id)?.planFile) {
+    return {
+      planSharing: Boolean(getPlanShareContext().target),
+      walkthroughSharing: false,
+    };
+  }
+  const sharing = Boolean((await getWalkthroughShareContext(event.sender.id)).target);
+  return {
+    planSharing: sharing,
+    walkthroughSharing: sharing,
+  };
+});
 
 ipcMain.handle('codiff:askReviewAssistant', async (event, request) => {
   const repositoryPath = windowRepositories.get(event.sender.id) || getLaunchPath();

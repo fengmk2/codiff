@@ -52,7 +52,7 @@ export const flagDefinitions = [
     type: 'string',
   },
   {
-    description: 'Generate and share a walkthrough, then print its URL; use HEAD when clean.',
+    description: 'Share a walkthrough or a --plan file, then print its URL.',
     name: 'share',
     type: 'boolean',
   },
@@ -96,6 +96,7 @@ export const usageExamples = [
   { command: 'codiff pr 75', description: 'Review pull request #75 (alternate syntax).' },
   { command: 'codiff mr 75', description: 'Review GitLab merge request !75.' },
   { command: 'codiff --plan plan.md', description: 'Edit a plan and wait for handoff.' },
+  { command: 'codiff --plan plan.md --share', description: 'Share a Markdown plan.' },
   { command: 'codiff -w', description: 'Walk through local changes, or HEAD when clean.' },
   { command: 'codiff -w a1b2c3d', description: 'Generate a narrative walkthrough for a commit.' },
   { command: 'codiff --share', description: 'Share local changes, or HEAD when clean.' },
@@ -258,6 +259,10 @@ export const parseArguments = (args) => {
 
   for (let index = 0; index < positionals.length; index += 1) {
     const arg = positionals[index];
+    if (planFilePath) {
+      requestedPath ??= arg;
+      continue;
+    }
     if (!pullRequestUrl && isPullRequestUrlArgument(arg)) {
       pullRequestUrl = arg;
       continue;
@@ -336,7 +341,7 @@ export const parseArguments = (args) => {
     requestedPath: resolve(requestedPath ?? process.cwd()),
     ...(values.share === true ? { share: true } : {}),
     version: values.version === true,
-    walkthrough: values.walkthrough === true || values.share === true,
+    walkthrough: values.walkthrough === true || (values.share === true && !planFilePath),
     ...(values['walkthrough-guide'] === true ? { walkthroughGuide: true } : {}),
     ...(walkthroughContextPath ? { walkthroughContextPath: resolve(walkthroughContextPath) } : {}),
     ...(walkthroughFilePath ? { walkthroughFilePath: resolve(walkthroughFilePath) } : {}),

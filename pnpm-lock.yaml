@@ -114,8 +114,8 @@ importers:
   core:
     dependencies:
       '@nkzw/mdx-editor':
-        specifier: 0.1.1
-        version: 0.1.1(@codemirror/language@6.12.3)(@lezer/highlight@1.2.3)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(yjs@13.6.31)
+        specifier: 0.1.2
+        version: 0.1.2(@codemirror/language@6.12.3)(@lezer/highlight@1.2.3)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(yjs@13.6.31)
       '@phosphor-icons/react':
         specifier: ^2.1.10
         version: 2.1.10(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
@@ -1027,8 +1027,8 @@ packages:
     peerDependencies:
       eslint: '>= 9'
 
-  '@nkzw/mdx-editor@0.1.1':
-    resolution: {integrity: sha512-sUHLpkP/BSZ8sCm+QNyraZrDs9uPf0muV0nlgLubxHxOb6sqfYvy5/Ms0+tMPW3CJ0cxHZPwwatFwnGIDht1dQ==}
+  '@nkzw/mdx-editor@0.1.2':
+    resolution: {integrity: sha512-HbgGi1HL9hl2E6o/OglyvWSefLnNiT3Tsfk00C6W1E8/7Ly3/o6LnFgbn1FOvdk1RLjlEYf5nLqDxpy9TXDMpA==}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
@@ -7009,7 +7009,7 @@ snapshots:
     dependencies:
       eslint: 9.39.2(jiti@2.7.0)
 
-  '@nkzw/mdx-editor@0.1.1(@codemirror/language@6.12.3)(@lezer/highlight@1.2.3)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(yjs@13.6.31)':
+  '@nkzw/mdx-editor@0.1.2(@codemirror/language@6.12.3)(@lezer/highlight@1.2.3)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(yjs@13.6.31)':
     dependencies:
       '@codemirror/commands': 6.10.3
       '@codemirror/lang-markdown': 6.5.0
@@ -7021,6 +7021,7 @@ snapshots:
       '@lexical/extension': 0.45.0
       '@lexical/link': 0.45.0
       '@lexical/list': 0.45.0
+      '@lexical/mark': 0.45.0
       '@lexical/markdown': 0.45.0
       '@lexical/plain-text': 0.45.0
       '@lexical/react': 0.45.0(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(yjs@13.6.31)

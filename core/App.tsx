@@ -253,6 +253,7 @@ export default function App() {
   const [walkthroughLoading, setWalkthroughLoading] = useState(false);
   const [walkthroughUnread, setWalkthroughUnread] = useState(false);
   const [walkthroughSharing, setWalkthroughSharing] = useState(false);
+  const [sharePlanEnabled, setSharePlanEnabled] = useState(false);
   const [shareWalkthroughEnabled, setShareWalkthroughEnabled] = useState(false);
   const [mainMode, setMainMode] = useState<MainMode>('review');
   const historyRequestRef = useRef(0);
@@ -870,6 +871,7 @@ export default function App() {
     void window.codiff.getFeatureFlags().then(
       (flags) => {
         if (!canceled) {
+          setSharePlanEnabled(flags.planSharing);
           setShareWalkthroughEnabled(flags.walkthroughSharing);
         }
       },
@@ -2250,7 +2252,7 @@ export default function App() {
       );
     }
     return planDocument ? (
-      <PlanEditorView document={planDocument} />
+      <PlanEditorView document={planDocument} shareEnabled={sharePlanEnabled} />
     ) : (
       <main className="loading italic">Loading…</main>
     );

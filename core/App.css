@@ -194,6 +194,14 @@ html[data-codiff-platform='darwin'] .plan-header {
   background: var(--sidebar-vibrancy-tint);
 }
 
+.shared-plan-shell {
+  height: 100dvh;
+}
+
+.shared-plan-shell .plan-header {
+  padding-left: 14px;
+}
+
 .plan-title {
   color: var(--sidebar-text);
   font: 600 12px/1.35 var(--font-mono);
@@ -211,6 +219,17 @@ html[data-codiff-platform='darwin'] .plan-header {
 
 .plan-done-button {
   justify-self: end;
+}
+
+.plan-actions {
+  align-items: center;
+  display: flex;
+  gap: 6px;
+  justify-self: end;
+}
+
+.plan-share-button {
+  gap: 5px;
 }
 
 .plan-save-error {

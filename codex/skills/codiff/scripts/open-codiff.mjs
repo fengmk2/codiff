@@ -244,15 +244,46 @@ for (let index = 0; index < rawArgs.length; index += 1) {
 const sessionCwd =
   process.env.CODEX_SESSION_CWD || readSessionCwd(threadId) || getFallbackSessionCwd();
 
+if (planFile && shareWalkthrough) {
+  const planFilePath = resolve(sessionCwd, planFile);
+  if (!existsSync(planFilePath) || !/\.md$/i.test(planFilePath)) {
+    process.stderr.write(`open-codiff: plan file not found at ${planFilePath}.\n`);
+    process.exit(1);
+  }
+  const shareCommand = getShareCommand();
+  const shareResult = spawnSync(
+    shareCommand.command,
+    [
+      ...shareCommand.args,
+      '--plan',
+      planFilePath,
+      '--agent',
+      'codex',
+      ...(threadId ? ['--codex-session', threadId] : []),
+      ...(openSharedWalkthrough ? ['--open'] : []),
+      ...forwardedArgs,
+    ],
+    { cwd: sessionCwd, encoding: 'utf8' },
+  );
+  if (shareResult.stdout) {
+    process.stdout.write(shareResult.stdout);
+  }
+  if (shareResult.stderr) {
+    process.stderr.write(shareResult.stderr);
+  }
+  if (shareResult.error) {
+    process.stderr.write(`${shareResult.error.message}\n`);
+    process.exit(1);
+  }
+  process.exit(shareResult.status ?? 0);
+}
+
 if (planFile) {
   const planFilePath = resolve(sessionCwd, planFile);
   if (!existsSync(planFilePath) || !/\.md$/i.test(planFilePath)) {
     process.stderr.write(`open-codiff: plan file not found at ${planFilePath}.\n`);
     process.exit(1);
   }
-  const hasRepositoryTarget = forwardedArgs.some(
-    (arg) => !arg.startsWith('-') && existsSync(resolve(sessionCwd, arg)),
-  );
   const codiffCommand = getCodiffCommand();
   const result = spawnSync(
     codiffCommand.command,
@@ -264,7 +295,6 @@ if (planFile) {
       'codex',
       ...(threadId ? ['--codex-session', threadId] : []),
       ...forwardedArgs,
-      ...(hasRepositoryTarget ? [] : [sessionCwd]),
     ],
     { cwd: sessionCwd, encoding: 'utf8', stdio: 'inherit' },
   );

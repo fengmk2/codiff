@@ -184,9 +184,16 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
   let repositoryPath = null;
   let sourceCandidate = null;
   let rangeCandidate = null;
+  const requestedPlanFilePath =
+    (typeof values['plan-file'] === 'string' ? values['plan-file'] : '') ||
+    (useEnvironment ? process.env.CODIFF_PLAN_FILE || '' : '');
 
   for (let index = 0; index < positionals.length; index += 1) {
     const arg = positionals[index];
+    if (requestedPlanFilePath) {
+      repositoryPath ??= arg;
+      continue;
+    }
     if (!pullRequestUrl && isPullRequestUrlArgument(arg)) {
       pullRequestUrl = arg;
       continue;
@@ -284,10 +291,7 @@ const parseCommandLineArguments = (commandLine = process.argv) => {
     (typeof values['pi-session'] === 'string' ? values['pi-session'] : '') ||
     envPiSessionId ||
     undefined;
-  const planFilePath =
-    (typeof values['plan-file'] === 'string' ? values['plan-file'] : '') ||
-    envPlanFilePath ||
-    undefined;
+  const planFilePath = requestedPlanFilePath || envPlanFilePath || undefined;
   const planResultFilePath =
     (typeof values['plan-result-file'] === 'string' ? values['plan-result-file'] : '') ||
     envPlanResultFilePath ||

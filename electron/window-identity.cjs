@@ -2,7 +2,7 @@
 
 const { execFileSync } = require('node:child_process');
 const { realpathSync } = require('node:fs');
-const { resolve } = require('node:path');
+const { dirname, resolve } = require('node:path');
 const { parseReviewUrl } = require('./review-source.cjs');
 
 /**
@@ -155,7 +155,6 @@ const getSourceKey = (repositoryRoot, source = { type: 'working-tree' }) => {
 
 /** @param {string} repositoryPath @param {Partial<CodiffLaunchOptions>} [launchOptions] */
 const getWindowIdentity = (repositoryPath, launchOptions = {}) => {
-  const repositoryRoot = resolveRepositoryRoot(repositoryPath);
   if (launchOptions.planFile) {
     const planPath = getRealPath(launchOptions.planFile);
     const resultPath = launchOptions.planResultFile
@@ -163,10 +162,11 @@ const getWindowIdentity = (repositoryPath, launchOptions = {}) => {
       : 'standalone';
     return {
       key: `plan:${planPath}\0${resultPath}`,
-      repositoryRoot,
+      repositoryRoot: getRealPath(dirname(planPath)),
       sourceKey: `plan:${planPath}`,
     };
   }
+  const repositoryRoot = resolveRepositoryRoot(repositoryPath);
   const implicitWalkthroughHead =
     launchOptions.walkthrough &&
     !launchOptions.walkthroughFile &&

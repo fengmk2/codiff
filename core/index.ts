@@ -1,3 +1,4 @@
+export { SharedPlanApp } from './SharedPlanApp.tsx';
 export { SharedWalkthroughApp } from './SharedWalkthroughApp.tsx';
 export type {
   ChangedFile,
@@ -6,6 +7,8 @@ export type {
   DiffSection,
   NarrativeWalkthrough,
   ReviewSource,
+  SharedPlanSnapshot,
   SharedWalkthroughSnapshot,
+  SharePlanResult,
   ShareWalkthroughResult,
 } from './types.ts';

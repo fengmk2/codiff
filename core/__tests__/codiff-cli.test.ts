@@ -4,6 +4,7 @@ import {
   chmod,
   mkdir,
   mkdtemp,
+  readFile,
   realpath,
   rm,
   truncate,
@@ -145,6 +146,37 @@ test('parseArguments keeps existing hash-like paths as repository paths', async 
       walkthrough: false,
     });
   } finally {
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test.sequential('parseArguments does not inspect Git refs for plan working directories', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codiff-plan-arguments-'));
+  const fakeBin = join(directory, 'bin');
+  const gitMarker = join(directory, 'git-invoked');
+  const planFile = join(directory, 'plan.md');
+  const workspace = join(directory, 'workspace');
+  const previousPath = process.env.PATH;
+
+  try {
+    await mkdir(fakeBin);
+    await mkdir(workspace);
+    await writeFile(planFile, '# Plan\n');
+    await writeFile(join(fakeBin, 'git'), `#!/bin/sh\nprintf invoked > "${gitMarker}"\nexit 99\n`);
+    await chmod(join(fakeBin, 'git'), 0o755);
+    process.env.PATH = `${fakeBin}:${previousPath ?? ''}`;
+    const realWorkspace = await realpath(workspace);
+
+    await withCwd(directory, () => {
+      expect(parseArguments(['--plan', planFile, 'workspace'])).toMatchObject({
+        commitRef: null,
+        planFilePath: planFile,
+        requestedPath: realWorkspace,
+      });
+    });
+    expect(await readFile(gitMarker, 'utf8').catch(() => null)).toBeNull();
+  } finally {
+    process.env.PATH = previousPath;
     await rm(directory, { force: true, recursive: true });
   }
 });
@@ -742,12 +774,43 @@ test('Codex skill launcher opens a blocking plan handoff', async () => {
       },
     );
 
+    expect(await logger.readArgs()).toEqual(['--plan', planFile, '--agent', 'codex']);
+  } finally {
+    await logger.cleanup();
+  }
+});
+
+test('Codex skill launcher delegates plan shares without opening Electron', async () => {
+  const logger = await createFakeCommandLogger('codiff-plan-share-launcher-', 'share-codiff');
+  const repositoryPath = join(logger.directory, 'repo');
+  const planFile = join(logger.directory, 'plan.md');
+  const sessionId = '019e5e57-e7d6-7392-9ad1-ad959319d2fb';
+
+  try {
+    await mkdir(repositoryPath, { recursive: true });
+    await writeFile(planFile, '# Plan\n');
+
+    await execFileAsync(
+      process.execPath,
+      [resolve('codex/skills/codiff/scripts/open-codiff.mjs'), '--plan', planFile, '--share'],
+      {
+        cwd: resolve('codex/skills/codiff'),
+        env: {
+          ...logger.env,
+          CODEX_SESSION_CWD: repositoryPath,
+          CODEX_THREAD_ID: sessionId,
+          CODIFF_SHARE_COMMAND: logger.commandPath,
+        },
+      },
+    );
+
     expect(await logger.readArgs()).toEqual([
       '--plan',
       planFile,
       '--agent',
       'codex',
-      repositoryPath,
+      '--codex-session',
+      sessionId,
     ]);
   } finally {
     await logger.cleanup();

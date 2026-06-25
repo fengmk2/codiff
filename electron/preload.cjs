@@ -98,6 +98,7 @@ const codiff = {
   setDiffStyle: (value) => ipcRenderer.invoke('codiff:setDiffStyle', value),
   setShowOutdated: (value) => ipcRenderer.invoke('codiff:setShowOutdated', value),
   setWordWrap: (value) => ipcRenderer.invoke('codiff:setWordWrap', value),
+  sharePlan: (review) => ipcRenderer.invoke('codiff:sharePlan', review),
   shareWalkthrough: (snapshot) => ipcRenderer.invoke('codiff:shareWalkthrough', snapshot),
   resetCodeFontSize: () => ipcRenderer.invoke('codiff:resetCodeFontSize'),
   saveMarkdownDocument: (request) => ipcRenderer.invoke('codiff:saveMarkdownDocument', request),

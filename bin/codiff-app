@@ -40,7 +40,7 @@ show_help() {
   printf '  %-38s%s%s%s\n' "--opencode-session <id>" "$gray" "Attach OpenCode session metadata to a walkthrough." "$reset"
   printf '  %-38s%s%s%s\n' "--pi-session <id>" "$gray" "Attach Pi session metadata to a walkthrough." "$reset"
   printf '  %-38s%s%s%s\n' "--plan <file>" "$gray" "Edit a Markdown plan and wait until it is handed back." "$reset"
-  printf '  %-38s%s%s%s\n' "--share" "$gray" "Generate and share a walkthrough, then print its URL; use HEAD when clean." "$reset"
+  printf '  %-38s%s%s%s\n' "--share" "$gray" "Share a walkthrough or a --plan file, then print its URL." "$reset"
   printf '  %-38s%s%s%s\n' "--version, -v" "$gray" "Show version number and exit." "$reset"
   printf '  %-38s%s%s%s\n' "--walkthrough, -w" "$gray" "Start an LLM walkthrough; use HEAD when there are no local changes." "$reset"
   printf '  %-38s%s%s%s\n' "--walkthrough-context <file>" "$gray" "Seed a walkthrough with Codex conversation context JSON." "$reset"
@@ -48,18 +48,19 @@ show_help() {
   printf '  %-38s%s%s%s\n' "--walkthrough-guide" "$gray" "Print the narrative walkthrough authoring guide and schema, then exit." "$reset"
   printf '\n'
   printf '%s\n' "${blue_bold}Examples:${reset}"
-  printf '  %-22s%s%s%s\n' "codiff" "$gray" "Review staged and unstaged changes." "$reset"
-  printf '  %-22s%s%s%s\n' "codiff /path/to/repo" "$gray" "Review changes in a specific repository." "$reset"
-  printf '  %-22s%s%s%s\n' "codiff main" "$gray" "Review the current branch against main." "$reset"
-  printf '  %-22s%s%s%s\n' "codiff a1b2c3d" "$gray" "Review a specific commit." "$reset"
-  printf '  %-22s%s%s%s\n' "codiff '#75'" "$gray" "Review pull request #75." "$reset"
-  printf '  %-22s%s%s%s\n' "codiff pr 75" "$gray" "Review pull request #75 (alternate syntax)." "$reset"
-  printf '  %-22s%s%s%s\n' "codiff mr 75" "$gray" "Review GitLab merge request !75." "$reset"
-  printf '  %-22s%s%s%s\n' "codiff --plan plan.md" "$gray" "Edit a plan and wait for handoff." "$reset"
-  printf '  %-22s%s%s%s\n' "codiff -w" "$gray" "Walk through local changes, or HEAD when clean." "$reset"
-  printf '  %-22s%s%s%s\n' "codiff -w a1b2c3d" "$gray" "Walkthrough a specific commit." "$reset"
-  printf '  %-22s%s%s%s\n' "codiff --share" "$gray" "Share local changes, or HEAD when clean." "$reset"
-  printf '  %-22s%s%s%s\n' "codiff --share HEAD" "$gray" "Share a walkthrough for a commit." "$reset"
+  printf '  %-32s%s%s%s\n' "codiff" "$gray" "Review staged and unstaged changes." "$reset"
+  printf '  %-32s%s%s%s\n' "codiff /path/to/repo" "$gray" "Review changes in a specific repository." "$reset"
+  printf '  %-32s%s%s%s\n' "codiff main" "$gray" "Review the current branch against main." "$reset"
+  printf '  %-32s%s%s%s\n' "codiff a1b2c3d" "$gray" "Review a specific commit." "$reset"
+  printf '  %-32s%s%s%s\n' "codiff '#75'" "$gray" "Review pull request #75." "$reset"
+  printf '  %-32s%s%s%s\n' "codiff pr 75" "$gray" "Review pull request #75 (alternate syntax)." "$reset"
+  printf '  %-32s%s%s%s\n' "codiff mr 75" "$gray" "Review GitLab merge request !75." "$reset"
+  printf '  %-32s%s%s%s\n' "codiff --plan plan.md" "$gray" "Edit a plan and wait for handoff." "$reset"
+  printf '  %-32s%s%s%s\n' "codiff --plan plan.md --share" "$gray" "Share a Markdown plan." "$reset"
+  printf '  %-32s%s%s%s\n' "codiff -w" "$gray" "Walk through local changes, or HEAD when clean." "$reset"
+  printf '  %-32s%s%s%s\n' "codiff -w a1b2c3d" "$gray" "Walkthrough a specific commit." "$reset"
+  printf '  %-32s%s%s%s\n' "codiff --share" "$gray" "Share local changes, or HEAD when clean." "$reset"
+  printf '  %-32s%s%s%s\n' "codiff --share HEAD" "$gray" "Share a walkthrough for a commit." "$reset"
 }
 
 for arg in "$@"; do
@@ -341,6 +342,11 @@ for arg in "$@"; do
       ;;
   esac
 done
+
+if [ -n "$plan_file_path" ] && [ -n "$source_ref" ] && [ -z "$repository_path" ]; then
+  repository_path="$source_ref"
+  source_ref=""
+fi
 
 if [ -n "$source_ref" ] && [ -z "$commit_ref" ] && [ -z "$branch_ref" ]; then
   repository_context="${repository_path:-$PWD}"
