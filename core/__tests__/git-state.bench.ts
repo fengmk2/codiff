@@ -4,7 +4,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { promisify } from 'node:util';
-import { afterAll, beforeAll, bench, describe } from 'vitest';
+import { afterAll, beforeAll, bench, describe } from 'vite-plus/test';
 import type { RepositoryState, ReviewSource } from '../types.ts';
 
 type GitStateModule = {

@@ -1,5 +1,5 @@
 import { createRequire } from 'node:module';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test } from 'vite-plus/test';
 
 const require = createRequire(import.meta.url);
 type GitLabPosition = Record<string, unknown> & {
