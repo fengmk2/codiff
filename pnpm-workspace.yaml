@@ -12,9 +12,9 @@ blockExoticSubdeps: false
 minimumReleaseAgeExclude:
   - '@nkzw/*'
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@^0.1.24
-  vite-plus: ^0.1.24
-  vitest: npm:@voidzero-dev/vite-plus-test@^0.1.24
+  vite: npm:@voidzero-dev/vite-plus-core@0.0.0-commit.4f61f920640a17d1ebd019f516e883f6de6a9811
+  vite-plus: 0.0.0-commit.4f61f920640a17d1ebd019f516e883f6de6a9811
+  vitest: 4.1.9
 nodeLinker: hoisted
 onlyBuiltDependencies:
   - '@nkzw/mdx-editor'
