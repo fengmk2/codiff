@@ -245,7 +245,7 @@ const renderAppForOpenFileShortcut = async (file: ChangedFile) => {
 
   await waitFor(() => {
     expect(container.querySelector('.loading')).toBeNull();
-    expect(container.querySelector('.codiff-file-header.selected')).not.toBeNull();
+    expect(container.querySelector('.codiff-file-header')).not.toBeNull();
   });
 
   return {
@@ -433,9 +433,11 @@ test('repository reload restores the selected file when it still exists', async 
   } satisfies RepositoryState;
 
   writeReloadSelection(nextState, secondFile.path);
+  const openFile = vi.fn(async () => {});
 
   window.codiff = createCodiffMock({
     getRepositoryState: vi.fn(async () => nextState),
+    openFile,
   });
 
   const container = document.createElement('div');
@@ -450,10 +452,13 @@ test('repository reload restores the selected file when it still exists', async 
 
     await waitFor(() => {
       expect(container.querySelector('.loading')).toBeNull();
-      expect(
-        container.querySelector('.codiff-file-header.selected .codiff-file-path')?.textContent,
-      ).toBe(secondFile.path);
+      expect(container.querySelector('.codiff-file-header')).not.toBeNull();
     });
+    await act(async () => {
+      dispatchModK();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(openFile).toHaveBeenCalledWith(secondFile.path);
   } finally {
     if (root) {
       await act(async () => root?.unmount());
@@ -477,9 +482,11 @@ test('repository reload restores the selected file from the previous source', as
   );
 
   writeReloadSelection(nextState, secondFile.path);
+  const openFile = vi.fn(async () => {});
 
   window.codiff = createCodiffMock({
     getRepositoryState,
+    openFile,
   });
 
   const container = document.createElement('div');
@@ -494,10 +501,13 @@ test('repository reload restores the selected file from the previous source', as
 
     await waitFor(() => {
       expect(container.querySelector('.loading')).toBeNull();
-      expect(
-        container.querySelector('.codiff-file-header.selected .codiff-file-path')?.textContent,
-      ).toBe(secondFile.path);
+      expect(container.querySelector('.codiff-file-header')).not.toBeNull();
     });
+    await act(async () => {
+      dispatchModK();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(openFile).toHaveBeenCalledWith(secondFile.path);
     expect(getRepositoryState).toHaveBeenCalledWith(source);
   } finally {
     if (root) {

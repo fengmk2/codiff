@@ -1,4 +1,5 @@
 import type { MarkdownEditorHandle } from '@nkzw/mdx-editor';
+import { frontmatterPlugin, imagePlugin } from '@nkzw/mdx-editor/core';
 import { CaretDownIcon as CaretDown } from '@phosphor-icons/react/CaretDown';
 import { ChatCircleIcon as ChatCircle } from '@phosphor-icons/react/ChatCircle';
 import { CheckIcon as Check } from '@phosphor-icons/react/Check';
@@ -77,7 +78,6 @@ import {
 } from '../../lib/diff.ts';
 import { getItemVersion } from '../../lib/item-version.ts';
 import { isNativeInputTarget } from '../../lib/keyboard.ts';
-import { renderMarkdown } from '../../lib/markdown.tsx';
 import {
   getCommentKey,
   getReviewCommentLineLabel,
@@ -113,6 +113,13 @@ import { DiffLineCountBadge } from './Sidebar.tsx';
 import { useCopiedState } from './useCopiedState.ts';
 
 const emptyMarkdownPreviewSectionIds = new Set<string>();
+const markdownPreviewPlugins = [
+  frontmatterPlugin(),
+  imagePlugin({
+    disableImageResize: true,
+    disableImageSettingsButton: true,
+  }),
+];
 const MarkdownEditor = lazy(async () => {
   const module = await import('@nkzw/mdx-editor');
   return { default: module.MarkdownEditor };
@@ -334,8 +341,13 @@ const canSubmitComment = (comment: ReviewComment) =>
 const withCommentBody = (comment: ReviewComment, body: string): ReviewComment =>
   comment.body === body ? comment : { ...comment, body };
 
-const getAddedLinesDigest = (lines: ReadonlySet<number>) =>
-  lines.size > 0 ? [...lines].join(',') : '';
+const getContentDigest = (value: string) => {
+  let hash = 0;
+  for (let index = 0; index < value.length; index += 1) {
+    hash = (hash * 31 + value.charCodeAt(index)) | 0;
+  }
+  return `${value.length}:${(hash >>> 0).toString(36)}`;
+};
 
 const formatBytes = (size: number) => {
   if (size < 1024) {
@@ -355,7 +367,6 @@ const formatBytes = (size: number) => {
 };
 
 function MarkdownPreview({
-  addedLines,
   contents,
   editable,
   layoutKey,
@@ -364,7 +375,6 @@ function MarkdownPreview({
   path,
   sectionId,
 }: {
-  addedLines: ReadonlySet<number>;
   contents: string;
   editable: boolean;
   layoutKey: string;
@@ -387,8 +397,49 @@ function MarkdownPreview({
     </div>
   ) : (
     <div className="codiff-markdown-preview">
-      {renderMarkdown(contents, { addedLines, highlightCode: true })}
+      <ReadOnlyMarkdown
+        ariaLabel={`Preview ${path}`}
+        className="codiff-markdown-preview-editor"
+        onHeightChange={() => onLayoutReady(sectionId)}
+        value={contents}
+      />
     </div>
+  );
+}
+
+function ReadOnlyMarkdown({
+  ariaLabel,
+  className,
+  density = 'document',
+  onHeightChange,
+  value,
+  variant = 'plain',
+}: {
+  ariaLabel: string;
+  className: string;
+  density?: 'compact' | 'document';
+  onHeightChange?: (height: number) => void;
+  value: string;
+  variant?: 'embedded' | 'plain';
+}) {
+  return (
+    <Suspense
+      fallback={<div className={`${className} codiff-readonly-markdown-loading`}>Loading…</div>}
+    >
+      <MarkdownEditor
+        additionalPlugins={markdownPreviewPlugins}
+        ariaLabel={ariaLabel}
+        className={className}
+        colorScheme="inherit"
+        density={density}
+        onHeightChange={onHeightChange}
+        readOnly
+        spellCheck={false}
+        suppressHtmlProcessing
+        value={value}
+        variant={variant}
+      />
+    </Suspense>
   );
 }
 
@@ -930,7 +981,14 @@ function ReviewCommentEditor({
               {comment.codexReply.status === 'loading' ? (
                 <span className="review-comment-codex-loading">Waiting for {agentLabel}…</span>
               ) : (
-                renderMarkdown(comment.codexReply.body ?? comment.codexReply.error ?? '')
+                <ReadOnlyMarkdown
+                  ariaLabel={`${agentLabel} reply`}
+                  className="review-comment-codex-reply-markdown"
+                  density="compact"
+                  onHeightChange={handleHeightChange}
+                  value={comment.codexReply.body ?? comment.codexReply.error ?? ''}
+                  variant="embedded"
+                />
               )}
             </div>
           </div>
@@ -1721,14 +1779,13 @@ export function ReviewCodeView({
           continue;
         }
         if (isMarkdownPreview) {
-          const markdownPreviewAddedLinesDigest = getAddedLinesDigest(markdownPreview.addedLines);
-          const markdownPreviewLayoutKey = `${section.id}:${markdownPreview.contents.length}:${markdownPreviewAddedLinesDigest}`;
+          const markdownPreviewContentDigest = getContentDigest(markdownPreview.contents);
+          const markdownPreviewLayoutKey = `${section.id}:${markdownPreviewContentDigest}`;
           nextItems.push({
             annotations: [
               {
                 lineNumber: 1,
                 metadata: {
-                  addedLines: markdownPreview.addedLines,
                   contents: markdownPreview.contents,
                   editable: canEditMarkdown,
                   layoutKey: markdownPreviewLayoutKey,
@@ -1740,9 +1797,9 @@ export function ReviewCodeView({
             ],
             collapsed: isCollapsed,
             file: {
-              cacheKey: `markdown-preview:${section.newFile?.cacheKey ?? file.fingerprint}:${
-                markdownPreview.contents.length
-              }:${markdownPreviewAddedLinesDigest}`,
+              cacheKey: `markdown-preview:${
+                section.newFile?.cacheKey ?? file.fingerprint
+              }:${markdownPreviewContentDigest}`,
               contents: ' ',
               lang: 'text',
               name: file.path,
@@ -2621,7 +2678,6 @@ export function ReviewCodeView({
       if (annotation.metadata.type === 'markdown-preview') {
         return (
           <MarkdownPreview
-            addedLines={annotation.metadata.addedLines}
             contents={annotation.metadata.contents}
             editable={annotation.metadata.editable}
             layoutKey={annotation.metadata.layoutKey}

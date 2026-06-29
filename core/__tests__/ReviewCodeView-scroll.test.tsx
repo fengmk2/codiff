@@ -46,10 +46,12 @@ vi.mock('@nkzw/mdx-editor', async () => {
   const React = await import('react');
   type MockEditorProps = {
     ariaLabel?: string;
+    className?: string;
     contentClassName?: string;
     onBlur?: () => void;
     onChange?: (value: string) => void;
     onFocus?: () => void;
+    onHeightChange?: (height: number) => void;
     onKeyDown?: React.KeyboardEventHandler<HTMLDivElement>;
     placeholder?: string;
     readOnly?: boolean;
@@ -64,13 +66,17 @@ vi.mock('@nkzw/mdx-editor', async () => {
       MockEditorProps
     >((props, ref) => {
       const inputRef = React.useRef<HTMLTextAreaElement>(null);
+      const { onHeightChange } = props;
       React.useImperativeHandle(ref, () => ({
         focus: () => inputRef.current?.focus(),
       }));
+      React.useEffect(() => {
+        onHeightChange?.(100);
+      }, [onHeightChange]);
       return (
         <textarea
           aria-label={props.ariaLabel}
-          className={props.contentClassName}
+          className={props.contentClassName ?? props.className}
           onBlur={props.onBlur}
           onChange={(event) => props.onChange?.(event.currentTarget.value)}
           onFocus={props.onFocus}
@@ -176,7 +182,7 @@ test('switching edited Markdown back to a diff flushes and refreshes it first', 
   }
 });
 
-test('read-only Markdown previews highlight blocks containing added lines', async () => {
+test('read-only Markdown previews render with the shared Markdown editor', async () => {
   const sectionId = 'README.md:unstaged';
   const file = {
     fingerprint: 'markdown-preview-added-lines',
@@ -217,10 +223,14 @@ test('read-only Markdown previews highlight blocks containing added lines', asyn
       );
     });
 
-    expect(
-      container.querySelector('.codiff-markdown-preview .codiff-markdown-added'),
-    ).not.toBeNull();
-    expect(container.querySelector('.codiff-markdown-added')?.textContent).toBe('New paragraph.');
+    await waitFor(() => {
+      const preview = container.querySelector<HTMLTextAreaElement>(
+        '[aria-label="Preview README.md"]',
+      );
+      expect(preview).not.toBeNull();
+      expect(preview?.readOnly).toBe(true);
+      expect(preview?.value).toBe('# Title\n\nNew paragraph.\n');
+    });
   } finally {
     if (root) {
       await act(async () => root?.unmount());

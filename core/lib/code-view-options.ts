@@ -1,4 +1,4 @@
-import { registerCustomTheme, setCustomExtension, type FileOptions } from '@pierre/diffs';
+import { registerCustomTheme, setCustomExtension } from '@pierre/diffs';
 import dunkelTheme from '../themes/dunkel.json' with { type: 'json' };
 import lichtTheme from '../themes/licht.json' with { type: 'json' };
 import type { DiffSection, GitFileStatus } from '../types.ts';
@@ -53,95 +53,6 @@ export const workerHighlighterOptions = {
   tokenizeMaxLineLength: 20_000,
   useTokenTransformer: false,
 };
-
-export const markdownCodeBlockOptions = {
-  disableFileHeader: true,
-  disableLineNumbers: true,
-  enableGutterUtility: false,
-  lineHoverHighlight: 'disabled',
-  overflow: 'wrap',
-  theme: {
-    dark: 'Dunkel',
-    light: 'Licht',
-  },
-  themeType: 'system',
-  tokenizeMaxLength: 100_000,
-  tokenizeMaxLineLength: 20_000,
-  unsafeCSS: `
-    :host {
-      --diffs-font-family: var(--font-diff-mono, var(--font-mono));
-      --diffs-font-size: var(--font-diff-size, 13px);
-      --diffs-line-height: var(--font-diff-line-height, 20px);
-      --diffs-light-bg: transparent;
-      --diffs-dark-bg: transparent;
-      --diffs-bg: transparent;
-      --diffs-bg-context: transparent;
-      --diffs-bg-context-gutter: transparent;
-      --diffs-bg-buffer: transparent;
-      --diffs-bg-separator: transparent;
-      --diffs-bg-hover-override: transparent;
-    }
-
-    [data-file] {
-      background: transparent;
-      border: 0;
-      box-shadow: none;
-    }
-
-    pre,
-    code,
-    [data-file] [data-code],
-    [data-file] [data-content],
-    [data-file] [data-gutter] {
-      background: transparent;
-      background-color: transparent;
-      min-width: 0;
-    }
-
-    [data-file] [data-line],
-    [data-file] [data-column-number],
-    [data-file] [data-gutter-buffer],
-    [data-file] [data-line-annotation] {
-      --diffs-computed-decoration-bg: transparent;
-      --diffs-computed-diff-line-bg: transparent;
-      --diffs-computed-selected-line-bg: transparent;
-      --diffs-computed-hovered-line-bg: transparent;
-      --diffs-line-bg: transparent;
-      background: transparent;
-      background-color: transparent;
-    }
-
-    [data-file] [data-line][data-hovered],
-    [data-file] [data-column-number][data-hovered] {
-      --diffs-line-bg: transparent;
-      background-color: transparent;
-    }
-
-    [data-file] [data-gutter-utility-slot],
-    [data-file] [data-utility-button] {
-      display: none;
-      pointer-events: none;
-    }
-
-    [data-file] [data-code] {
-      max-height: 420px;
-      max-width: 100%;
-      overflow-x: hidden;
-    }
-
-    [data-overflow="wrap"] [data-line] {
-      overflow-wrap: anywhere;
-      white-space: pre-wrap;
-      word-break: break-word;
-    }
-
-    [data-code]::-webkit-scrollbar-track {
-      margin-left: 0;
-      margin-right: 0;
-    }
-  `,
-  useTokenTransformer: false,
-} satisfies FileOptions<never>;
 
 export const maxWorkerThreads = 3;
 

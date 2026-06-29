@@ -28,40 +28,7 @@ const joinDiffLines = (lines: ReadonlyArray<string>) =>
   lines.some((line) => line.includes('\n')) ? lines.join('') : lines.join('\n');
 
 export type MarkdownPreviewContents = {
-  addedLines: ReadonlySet<number>;
   contents: string;
-};
-
-const emptyAddedLines = new Set<number>();
-
-const getAddedLineNumbers = (
-  file: ChangedFile,
-  fileDiff: FileDiffMetadata,
-): ReadonlySet<number> => {
-  if (file.status === 'added' || file.status === 'untracked') {
-    return emptyAddedLines;
-  }
-
-  const addedLines = new Set<number>();
-
-  for (const hunk of fileDiff.hunks) {
-    let additionLineNumber = hunk.additionStart;
-
-    for (const content of hunk.hunkContent) {
-      if (content.type === 'context') {
-        additionLineNumber += content.lines;
-        continue;
-      }
-
-      for (let index = 0; index < content.additions; index += 1) {
-        addedLines.add(additionLineNumber + index);
-      }
-
-      additionLineNumber += content.additions;
-    }
-  }
-
-  return addedLines;
 };
 
 export const getMarkdownPreviewContents = (
@@ -75,14 +42,12 @@ export const getMarkdownPreviewContents = (
 
   if (section.newFile) {
     return {
-      addedLines: getAddedLineNumbers(file, fileDiff),
       contents: section.newFile.contents,
     };
   }
 
   return file.status === 'added' || file.status === 'untracked'
     ? {
-        addedLines: emptyAddedLines,
         contents: joinDiffLines(fileDiff.additionLines),
       }
     : null;

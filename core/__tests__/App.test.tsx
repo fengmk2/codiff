@@ -1,4 +1,3 @@
-import { renderToStaticMarkup } from 'react-dom/server';
 import { expect, test } from 'vite-plus/test';
 import { getDiffSearchResult } from '../lib/diff-search.ts';
 import {
@@ -11,7 +10,6 @@ import {
   shouldLoadDiffSectionContents,
 } from '../lib/diff.ts';
 import { isDiffSearchShortcut } from '../lib/keyboard.ts';
-import { renderMarkdown } from '../lib/markdown.tsx';
 import {
   buildReviewCommentsMarkdown,
   shouldDiscardReviewCommentOnEscape,
@@ -373,7 +371,7 @@ test('total diff line counts sum countable files only', () => {
   });
 });
 
-test('markdown previews track added source lines for modified files', () => {
+test('markdown previews use new file contents for modified files', () => {
   const file = {
     fingerprint: 'markdown-preview-added-lines',
     path: 'README.md',
@@ -401,71 +399,6 @@ test('markdown previews track added source lines for modified files', () => {
   const preview = getMarkdownPreviewContents(file, section, fileDiff);
 
   expect(preview?.contents).toBe(file.sections[0].newFile?.contents);
-  expect([...(preview?.addedLines ?? [])]).toEqual([2, 3, 5]);
-});
-
-test('markdown previews do not mark every line for new files', () => {
-  const file = {
-    fingerprint: 'markdown-preview-new-file',
-    path: 'README.md',
-    sections: [
-      {
-        binary: false,
-        id: 'README.md:staged',
-        kind: 'staged',
-        loadState: 'ready',
-        newFile: {
-          contents: '# Title\nAll new.\n',
-          name: 'README.md',
-        },
-        oldFile: {
-          contents: '',
-          name: 'README.md',
-        },
-        patch: '',
-      },
-    ],
-    status: 'added',
-  } satisfies ChangedFile;
-  const [{ fileDiff, section }] = getVisibleDiffSections(file, false);
-
-  const preview = getMarkdownPreviewContents(file, section, fileDiff);
-
-  expect(preview?.addedLines.size).toBe(0);
-});
-
-test('rendered markdown marks blocks intersecting added source lines', () => {
-  const html = renderToStaticMarkup(
-    <>
-      {renderMarkdown(
-        [
-          '# Title',
-          '',
-          'paragraph line one',
-          'paragraph line two',
-          '',
-          '- kept',
-          '- added',
-          '',
-          '> quoted',
-          '',
-          '---',
-          '',
-          '```ts',
-          'const value = true;',
-          '```',
-        ].join('\n'),
-        { addedLines: new Set([4, 7, 9, 11, 14]) },
-      )}
-    </>,
-  );
-
-  expect(html.match(/codiff-markdown-added/g)).toHaveLength(5);
-  expect(html).toContain('<p class="codiff-markdown-added">');
-  expect(html).toContain('<ul class="codiff-markdown-added">');
-  expect(html).toContain('<blockquote class="codiff-markdown-added">');
-  expect(html).toContain('<hr class="codiff-markdown-added"/>');
-  expect(html).toContain('<div class="codiff-markdown-code-added codiff-markdown-added"><pre>');
 });
 
 test('diff search shortcut does not claim fullscreen shortcut', () => {
