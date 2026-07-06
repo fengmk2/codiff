@@ -283,12 +283,16 @@ const validateRepositoryPath = (path) => {
     throw new Error('Invalid repository path.');
   }
 
-  const normalized = normalize(path);
-  if (normalized === '..' || normalized.startsWith(`..${sep}`)) {
+  if (path.split(/[\\/]+/u).includes('..')) {
     throw new Error('Invalid repository path.');
   }
 
-  return path;
+  const normalized = normalize(path);
+  if (normalized === '.' || normalized === '..' || normalized.startsWith(`..${sep}`)) {
+    throw new Error('Invalid repository path.');
+  }
+
+  return normalized;
 };
 
 /** @param {string} repoRoot @param {string} path */

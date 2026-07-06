@@ -62,6 +62,7 @@ export function Sidebar({
   viewed,
   walkthroughError,
   walkthroughLoading,
+  walkthroughOutdatedPaths,
   walkthroughUnread,
 }: {
   branchSource: Extract<ReviewSource, { type: 'branch-diff' }> | null;
@@ -93,6 +94,7 @@ export function Sidebar({
   viewed: Record<string, string>;
   walkthroughError: WalkthroughError | null;
   walkthroughLoading: boolean;
+  walkthroughOutdatedPaths: ReadonlySet<string>;
   walkthroughUnread: boolean;
 }) {
   const allowSelectionScroll = useRef(false);
@@ -351,7 +353,7 @@ export function Sidebar({
         />
       ) : mode === 'walkthrough' && narrativeWalkthrough ? (
         <NarrativeSidebar
-          changedPaths={reloadDeltaPaths}
+          changedPaths={walkthroughOutdatedPaths}
           files={commitFiles}
           navigation={narrativeNavigation}
           onShareWalkthrough={onShareWalkthrough}

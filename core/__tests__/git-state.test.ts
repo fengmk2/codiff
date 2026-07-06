@@ -112,6 +112,7 @@ type GitStateModule = {
     comments: ReadonlyArray<Record<string, unknown>>,
     resolvedCommentIds: ReadonlySet<number>,
   ) => Array<Record<string, unknown>>;
+  validateRepositoryPath: (path: unknown) => string;
 };
 
 const execFileAsync = promisify(execFile);
@@ -135,6 +136,7 @@ const {
   readWorkingTreeState,
   resolvePullRequestContentRefs,
   selectUnresolvedReviewComments,
+  validateRepositoryPath,
 } = require('../../electron/git-state.cjs') as GitStateModule;
 
 const git = async (repo: string, args: ReadonlyArray<string>) => {
@@ -196,6 +198,24 @@ test('parseGitHubPullRequestUrl reads canonical pull request URLs', () => {
     repo: 'codiff',
     url: 'https://github.com/nkzw-tech/codiff/pull/3',
   });
+});
+
+test('validateRepositoryPath returns normalized repository paths', () => {
+  expect(validateRepositoryPath('src/./file.ts')).toBe(join('src', 'file.ts'));
+  expect(validateRepositoryPath('src//nested/file.ts')).toBe(join('src', 'nested', 'file.ts'));
+});
+
+test('validateRepositoryPath rejects traversal segments', () => {
+  for (const path of [
+    '..',
+    '../file.ts',
+    'src/..',
+    'src/../file.ts',
+    'src/nested/../../file.ts',
+    String.raw`src\..\file.ts`,
+  ]) {
+    expect(() => validateRepositoryPath(path)).toThrow('Invalid repository path.');
+  }
 });
 
 test('createPullRequestHistoryFetchRefspecs fetches PR and base refs into Codiff refs', () => {

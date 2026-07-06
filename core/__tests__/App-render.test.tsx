@@ -220,6 +220,48 @@ const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['co
   ...overrides,
 });
 
+const createNarrativeWalkthroughFixture = (
+  hunks: ReadonlyArray<{ added: number; path: string; status: ChangedFile['status'] }>,
+) =>
+  ({
+    agent: 'codex',
+    chapters: [
+      {
+        blurb: 'Review the implementation.',
+        icon: 'gear',
+        id: 'impl',
+        stops: [
+          {
+            added: hunks.reduce((sum, hunk) => sum + hunk.added, 0),
+            deleted: 1,
+            hunkIds: hunks.map((hunk) => `${hunk.path}:unstaged:h1`),
+            hunks: hunks.map((hunk) => ({
+              added: hunk.added,
+              anchor: { display: hunk.path, sectionId: `${hunk.path}:unstaged`, side: 'both' },
+              deleted: hunk.path === 'src/app.ts' ? 1 : 0,
+              id: `${hunk.path}:unstaged:h1`,
+              path: hunk.path,
+              status: hunk.status,
+            })),
+            id: 'implementation-path',
+            importance: 'critical',
+            prose: 'Review these changes.',
+            title: 'Implementation path',
+          },
+        ],
+        title: 'Implementation',
+      },
+    ],
+    focus: 'Focus.',
+    generatedAt: '2026-06-07T00:00:00.000Z',
+    kind: 'narrative',
+    repo: { branch: 'main', root: '/repo' },
+    source: { type: 'working-tree' },
+    support: [],
+    title: 'Narrative',
+    version: 4,
+  }) satisfies NarrativeWalkthrough;
+
 const dispatchModK = () => {
   const isMac = navigator.platform.toLowerCase().includes('mac');
   window.dispatchEvent(new KeyboardEvent('keydown', { ctrlKey: !isMac, key: 'k', metaKey: isMac }));
@@ -815,6 +857,71 @@ test('repository reload colors only git status glyphs for files changed after re
           '[data-item-path="src/unchanged.ts"][data-item-git-status] > [data-item-section="git"]',
         ),
       ).toBeTruthy();
+    });
+  } finally {
+    if (root) {
+      await act(async () => root?.unmount());
+    }
+    container.remove();
+  }
+});
+
+test('walkthrough file reload shows files changed since reload as stale', async () => {
+  const unchangedFile = createChangedFile('src/unchanged.ts', { fingerprint: 'same' });
+  const changedFileBeforeReload = createChangedFile('src/changed.ts', { fingerprint: 'before' });
+  const changedFileAfterReload = createChangedFile('src/changed.ts', { fingerprint: 'after' });
+  const addedFile = createChangedFile('src/added.ts', { fingerprint: 'added', status: 'added' });
+  const previousState = {
+    ...repositoryState,
+    files: [unchangedFile, changedFileBeforeReload],
+  } satisfies RepositoryState;
+  const nextState = {
+    ...repositoryState,
+    files: [unchangedFile, changedFileAfterReload, addedFile],
+  } satisfies RepositoryState;
+  const narrativeWalkthrough = createNarrativeWalkthroughFixture([
+    { added: 1, path: unchangedFile.path, status: 'modified' },
+  ]);
+
+  writeReloadSelection(previousState, changedFileBeforeReload.path);
+
+  window.codiff = createCodiffMock({
+    getLaunchOptions: vi.fn(async () => ({
+      repositoryPathProvided: true,
+      walkthrough: false,
+      walkthroughFile: '/tmp/walkthrough.json',
+    })),
+    getNarrativeWalkthrough: vi.fn(async () => ({
+      status: 'ready' as const,
+      walkthrough: narrativeWalkthrough,
+    })),
+    getRepositoryState: vi.fn(async () => nextState),
+  });
+
+  const container = document.createElement('div');
+  document.body.append(container);
+  let root: Root | null = null;
+
+  try {
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('.wt-stop-block')).not.toBeNull();
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.wt-upnext')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('Regenerate walkthrough');
+      expect(container.textContent).toContain('changed.ts');
+      expect(container.textContent).toContain('added.ts');
+      expect(container.textContent).not.toContain('unchanged.tsChanged');
     });
   } finally {
     if (root) {
@@ -2581,6 +2688,209 @@ test('clicking the change banner refreshes the repository in place', async () =>
     const appOccurrences = container.textContent?.split('app.ts').length ?? 1;
     expect(appOccurrences - 1).toBeLessThanOrEqual(2);
     expect(container.textContent).not.toContain('-old\n+new\n');
+  } finally {
+    if (root) {
+      await act(async () => root?.unmount());
+    }
+    container.remove();
+  }
+});
+
+test('refreshing changed viewed files expands them in place', async () => {
+  const initialFile = createChangedFile('src/viewed.ts', { fingerprint: 'viewed:1' });
+  const refreshedFile = createChangedFile('src/viewed.ts', {
+    fingerprint: 'viewed:2',
+    patch: 'diff --git a/src/viewed.ts b/src/viewed.ts\n@@ -1 +1 @@\n-old\n+newer\n',
+  });
+  window.localStorage.setItem(
+    'codiff:viewed:/repo',
+    JSON.stringify({ [initialFile.path]: initialFile.fingerprint }),
+  );
+
+  let onRepositoryChanged: ((change: { root: string }) => void) | null = null;
+  let stateRequests = 0;
+  const getRepositoryState = vi.fn<Window['codiff']['getRepositoryState']>(async () => {
+    stateRequests += 1;
+    return {
+      ...repositoryState,
+      files: [stateRequests === 1 ? initialFile : refreshedFile],
+    };
+  });
+
+  window.codiff = createCodiffMock({
+    getRepositoryState,
+    onRepositoryChanged: vi.fn((callback) => {
+      onRepositoryChanged = callback;
+      return () => {
+        onRepositoryChanged = null;
+      };
+    }),
+  });
+
+  const container = document.createElement('div');
+  document.body.append(container);
+  let root: Root | null = null;
+
+  try {
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+    });
+
+    await waitFor(() => {
+      const header = container.querySelector('.codiff-file-header');
+      expect(header).not.toBeNull();
+      expect(header?.classList.contains('collapsed')).toBe(true);
+    });
+
+    await act(async () => {
+      onRepositoryChanged?.({ root: '/repo' });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    const refreshButton = container.querySelector<HTMLButtonElement>('.repository-change-reload');
+    expect(refreshButton).not.toBeNull();
+    await act(async () => {
+      refreshButton?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await waitFor(() => {
+      const header = container.querySelector('.codiff-file-header');
+      expect(header).not.toBeNull();
+      expect(header?.classList.contains('collapsed')).toBe(false);
+      expect(header?.querySelector('.codiff-viewed-button')?.getAttribute('aria-pressed')).toBe(
+        'false',
+      );
+    });
+  } finally {
+    if (root) {
+      await act(async () => root?.unmount());
+    }
+    container.remove();
+  }
+});
+
+test('regenerating a walkthrough clears refresh-only changed sections', async () => {
+  const appFile = createChangedFile('src/app.ts');
+  const addedFile = createChangedFile('src/added.ts', {
+    fingerprint: 'src/added.ts:1',
+    patch: 'diff --git a/src/added.ts b/src/added.ts\n@@ -0,0 +1 @@\n+created\n',
+    status: 'added',
+  });
+  const laterFile = createChangedFile('src/later.ts', {
+    fingerprint: 'src/later.ts:1',
+    patch: 'diff --git a/src/later.ts b/src/later.ts\n@@ -0,0 +1 @@\n+later\n',
+    status: 'added',
+  });
+  const initialWalkthrough = createNarrativeWalkthroughFixture([
+    { added: 1, path: appFile.path, status: 'modified' },
+  ]);
+  const regeneratedWalkthrough = createNarrativeWalkthroughFixture([
+    { added: 1, path: appFile.path, status: 'modified' },
+    { added: 1, path: addedFile.path, status: 'added' },
+    { added: 1, path: laterFile.path, status: 'added' },
+  ]);
+
+  let onRepositoryChanged: ((change: { root: string }) => void) | null = null;
+  let stateRequests = 0;
+  const getRepositoryState = vi.fn<Window['codiff']['getRepositoryState']>(async () => {
+    stateRequests += 1;
+    return {
+      ...repositoryState,
+      files:
+        stateRequests === 1
+          ? [appFile]
+          : stateRequests === 2
+            ? [appFile, addedFile]
+            : [appFile, addedFile, laterFile],
+    };
+  });
+  let walkthroughRequests = 0;
+  const getNarrativeWalkthrough = vi.fn(async () => {
+    walkthroughRequests += 1;
+    return {
+      status: 'ready' as const,
+      walkthrough: walkthroughRequests === 1 ? initialWalkthrough : regeneratedWalkthrough,
+    };
+  });
+
+  window.codiff = createCodiffMock({
+    getLaunchOptions: vi.fn(async () => ({
+      repositoryPathProvided: true,
+      walkthrough: true,
+    })),
+    getNarrativeWalkthrough,
+    getRepositoryState,
+    onRepositoryChanged: vi.fn((callback) => {
+      onRepositoryChanged = callback;
+      return () => {
+        onRepositoryChanged = null;
+      };
+    }),
+  });
+
+  const container = document.createElement('div');
+  document.body.append(container);
+  let root: Root | null = null;
+
+  try {
+    await act(async () => {
+      root = createRoot(container);
+      root.render(<App />);
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector('.wt-stop-block')).not.toBeNull();
+      expect(getNarrativeWalkthrough).toHaveBeenCalledTimes(1);
+    });
+
+    await act(async () => {
+      onRepositoryChanged?.({ root: '/repo' });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.repository-change-reload')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.wt-upnext')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('Changed after the walkthrough was generated.');
+      expect(container.textContent).toContain('Regenerate walkthrough');
+      expect(container.textContent).toContain('added.ts');
+    });
+
+    await act(async () => {
+      onRepositoryChanged?.({ root: '/repo' });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('.repository-change-reload')?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await waitFor(() => {
+      expect(container.textContent).toContain('Regenerate walkthrough');
+      expect(container.textContent).toContain('added.ts');
+      expect(container.textContent).toContain('later.ts');
+    });
+
+    await act(async () => {
+      Array.from(container.querySelectorAll<HTMLButtonElement>('button'))
+        .find((button) => button.textContent?.includes('Regenerate walkthrough'))
+        ?.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    await waitFor(() => {
+      expect(getNarrativeWalkthrough).toHaveBeenCalledTimes(2);
+      expect(container.textContent).not.toContain('Changed after the walkthrough was generated.');
+    });
   } finally {
     if (root) {
       await act(async () => root?.unmount());

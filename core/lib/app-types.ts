@@ -138,6 +138,7 @@ export type SourceSession = {
   selectedPath: string | null;
   viewed: Record<string, string>;
   walkthroughError: WalkthroughError | null;
+  walkthroughOutdatedPaths: ReadonlySet<string>;
 };
 
 export type RepositoryLoadError = {
