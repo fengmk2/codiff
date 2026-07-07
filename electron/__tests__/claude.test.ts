@@ -181,6 +181,88 @@ process.stdin.on('end', () => {
   }
 });
 
+test('maps Claude structured output deltas to response progress', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codiff-claude-structured-progress-'));
+  const fakeClaudePath = join(directory, 'claude');
+  const previousClaudePath = process.env.CODIFF_CLAUDE_PATH;
+  const events = [
+    {
+      event: {
+        content_block: { signature: '', thinking: '', type: 'thinking' },
+        type: 'content_block_start',
+      },
+      type: 'stream_event',
+    },
+    {
+      event: {
+        delta: { thinking: 'Planning', type: 'thinking_delta' },
+        type: 'content_block_delta',
+      },
+      type: 'stream_event',
+    },
+    {
+      event: {
+        content_block: {
+          id: 'toolu_1',
+          input: {},
+          name: 'StructuredOutput',
+          type: 'tool_use',
+        },
+        type: 'content_block_start',
+      },
+      type: 'stream_event',
+    },
+    {
+      event: {
+        delta: { partial_json: '{"version":1}', type: 'input_json_delta' },
+        type: 'content_block_delta',
+      },
+      type: 'stream_event',
+    },
+    {
+      is_error: false,
+      result: '{"version":1}',
+      structured_output: { version: 1 },
+      type: 'result',
+    },
+  ];
+
+  try {
+    await writeFile(
+      fakeClaudePath,
+      `#!/usr/bin/env node
+process.stdin.resume();
+process.stdin.on('end', () => {
+  process.stdout.write(${JSON.stringify(events.map((event) => JSON.stringify(event)).join('\n'))});
+});
+`,
+    );
+    await chmod(fakeClaudePath, 0o755);
+    process.env.CODIFF_CLAUDE_PATH = fakeClaudePath;
+    const phases: Array<string> = [];
+
+    await expect(
+      runClaude(directory, 'prompt', { type: 'object' }, 'walkthrough.json', 'Timed out.', {
+        onProgress: (phase) => phases.push(phase),
+      }),
+    ).resolves.toBe('{"version":1}');
+
+    expect(phases).toEqual([
+      'agent-generation',
+      'agent-generation',
+      'response-received',
+      'response-received',
+    ]);
+  } finally {
+    if (previousClaudePath == null) {
+      delete process.env.CODIFF_CLAUDE_PATH;
+    } else {
+      process.env.CODIFF_CLAUDE_PATH = previousClaudePath;
+    }
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
 test('supports per-call Claude Code timeouts', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'codiff-claude-timeout-'));
   const fakeClaudePath = join(directory, 'claude');

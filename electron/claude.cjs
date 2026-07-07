@@ -157,7 +157,7 @@ const createClaudeStreamParser = (onProgress) => {
       const blockType = streamEvent.content_block?.type;
       if (blockType === 'thinking') {
         onProgress?.('agent-generation');
-      } else if (blockType === 'text') {
+      } else if (blockType === 'text' || blockType === 'tool_use') {
         onProgress?.('response-received');
       }
       return;
@@ -168,7 +168,7 @@ const createClaudeStreamParser = (onProgress) => {
     const deltaType = streamEvent.delta?.type;
     if (deltaType === 'thinking_delta') {
       onProgress?.('agent-generation');
-    } else if (deltaType === 'text_delta') {
+    } else if (deltaType === 'text_delta' || deltaType === 'input_json_delta') {
       onProgress?.('response-received');
     }
   };
