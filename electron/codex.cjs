@@ -28,6 +28,16 @@ const CODEX_NOT_FOUND_MESSAGE =
  * @typedef {{
  *   fallbackModel?: string;
  *   model?: string;
+ *   onMetrics?: (metrics: {
+ *     transport: 'app-server' | 'exec';
+ *     usage?: {
+ *       cachedInputTokens: number;
+ *       inputTokens: number;
+ *       outputTokens: number;
+ *       reasoningOutputTokens: number;
+ *       totalTokens: number;
+ *     };
+ *   }) => void;
  *   onModelFallback?: (fallbackModel: string, originalModel: string) => Promise<void> | void;
  *   onProgress?: (phase: import('../core/types.ts').WalkthroughProgressPhase) => void;
  *   reasoningEffort?: 'low' | 'medium' | 'high';
@@ -201,6 +211,27 @@ const isOpenAIModelAvailabilityError = (value) =>
     value,
   );
 
+/** @param {any} usage */
+const normalizeCodexUsage = (usage) => {
+  if (!usage || typeof usage !== 'object') {
+    return undefined;
+  }
+  const inputTokens = Number(usage.input_tokens ?? usage.inputTokens) || 0;
+  const cachedInputTokens = Number(usage.cached_input_tokens ?? usage.cachedInputTokens) || 0;
+  const outputTokens = Number(usage.output_tokens ?? usage.outputTokens) || 0;
+  const reasoningOutputTokens =
+    Number(usage.reasoning_output_tokens ?? usage.reasoningOutputTokens) || 0;
+  const totalTokens = Number(usage.total_tokens ?? usage.totalTokens) || inputTokens + outputTokens;
+
+  return {
+    cachedInputTokens,
+    inputTokens,
+    outputTokens,
+    reasoningOutputTokens,
+    totalTokens,
+  };
+};
+
 /**
  * Consume `codex exec --json` JSONL without exposing model output. This is the
  * compatibility parser for older CLIs without app-server support.
@@ -210,12 +241,17 @@ const isOpenAIModelAvailabilityError = (value) =>
 const createCodexEventParser = (onProgress) => {
   let lineBuffer = '';
   let lastMessage = '';
+  let usage;
 
   /** @param {unknown} input */
   const handleEvent = (input) => {
     const event = /** @type {any} */ (input);
     if (!event || typeof event !== 'object') {
       return;
+    }
+
+    if (event.type === 'turn.completed') {
+      usage = normalizeCodexUsage(event.usage);
     }
 
     if (event.type === 'thread.started') {
@@ -270,7 +306,7 @@ const createCodexEventParser = (onProgress) => {
         handleEvent(JSON.parse(rest));
       } catch {}
     }
-    return lastMessage;
+    return { lastMessage, usage };
   };
 
   return { flush, push };
@@ -402,7 +438,8 @@ const runCodex = async (
             return;
           }
 
-          const streamedMessage = eventParser.flush();
+          const { lastMessage: streamedMessage, usage } = eventParser.flush();
+          options.onMetrics?.({ transport: 'exec', usage });
           try {
             const message = await fs.readFile(outputPath, 'utf8');
             resolve(message);
@@ -442,6 +479,7 @@ const runCodex = async (
       let nextRequestId = 1;
       let stderr = '';
       let streamedMessage = '';
+      let usage;
       /** @type {Map<number, {reject: (error: Error) => void; resolve: (result: any) => void}>} */
       const pendingRequests = new Map();
 
@@ -527,6 +565,10 @@ const runCodex = async (
 
         const method = message?.method;
         const params = message?.params;
+        if (method === 'thread/tokenUsage/updated') {
+          usage = normalizeCodexUsage(params?.tokenUsage?.total);
+          return;
+        }
         if (
           method === 'thread/started' ||
           method === 'turn/started' ||
@@ -586,6 +628,10 @@ const runCodex = async (
           fail(new Error('Codex did not produce a final answer.'));
           return;
         }
+        options.onMetrics?.({
+          transport: 'app-server',
+          usage: usage ?? normalizeCodexUsage(turn?.usage ?? params?.usage),
+        });
         succeed(streamedMessage);
       };
 

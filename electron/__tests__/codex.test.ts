@@ -32,6 +32,16 @@ const {
     timeoutMessage?: string,
     options?: {
       model?: string;
+      onMetrics?: (metrics: {
+        transport: string;
+        usage?: {
+          cachedInputTokens: number;
+          inputTokens: number;
+          outputTokens: number;
+          reasoningOutputTokens: number;
+          totalTokens: number;
+        };
+      }) => void;
       onProgress?: (phase: string) => void;
       reasoningEffort?: 'low' | 'medium' | 'high';
       timeoutMs?: number;
@@ -222,6 +232,20 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
       params: { item: { text: '{"version":1}', type: 'agentMessage' } },
     });
     send({
+      method: 'thread/tokenUsage/updated',
+      params: {
+        tokenUsage: {
+          total: {
+            cachedInputTokens: 80,
+            inputTokens: 100,
+            outputTokens: 25,
+            reasoningOutputTokens: 10,
+            totalTokens: 125,
+          },
+        },
+      },
+    });
+    send({
       method: 'turn/completed',
       params: { turn: { items: [], status: 'completed' } },
     });
@@ -232,10 +256,12 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
     await chmod(fakeCodexPath, 0o755);
     process.env.CODIFF_CODEX_PATH = fakeCodexPath;
     const phases: Array<string> = [];
+    const metrics: Array<any> = [];
 
     await expect(
       runCodex(directory, 'prompt', {}, 'walkthrough.json', 'Timed out.', {
         onProgress: (phase) => phases.push(phase),
+        onMetrics: (value) => metrics.push(value),
       }),
     ).resolves.toBe('{"version":1}');
 
@@ -247,6 +273,18 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
       'response-received',
       'response-received',
       'response-received',
+    ]);
+    expect(metrics).toEqual([
+      {
+        transport: 'app-server',
+        usage: {
+          cachedInputTokens: 80,
+          inputTokens: 100,
+          outputTokens: 25,
+          reasoningOutputTokens: 10,
+          totalTokens: 125,
+        },
+      },
     ]);
 
     const records = (await readFile(requestsPath, 'utf8'))
@@ -275,6 +313,61 @@ readline.createInterface({ input: process.stdin }).on('line', (line) => {
       },
       threadId: 'thread-1',
     });
+  } finally {
+    if (previousCodexPath == null) {
+      delete process.env.CODIFF_CODEX_PATH;
+    } else {
+      process.env.CODIFF_CODEX_PATH = previousCodexPath;
+    }
+    await rm(directory, { force: true, recursive: true });
+  }
+});
+
+test('reports Codex exec token usage for eval instrumentation', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'codiff-codex-metrics-'));
+  const fakeCodexPath = join(directory, 'codex');
+  const previousCodexPath = process.env.CODIFF_CODEX_PATH;
+
+  try {
+    await writeFile(
+      fakeCodexPath,
+      `#!/usr/bin/env node
+const args = process.argv.slice(2);
+const outputIndex = args.indexOf('--output-last-message');
+require('node:fs').writeFileSync(args[outputIndex + 1], '{"version":1}');
+process.stdout.write(JSON.stringify({
+  type: 'turn.completed',
+  usage: {
+    cached_input_tokens: 80,
+    input_tokens: 100,
+    output_tokens: 25,
+    reasoning_output_tokens: 10,
+  },
+}) + '\\n');
+`,
+    );
+    await chmod(fakeCodexPath, 0o755);
+    process.env.CODIFF_CODEX_PATH = fakeCodexPath;
+    const metrics: Array<any> = [];
+
+    await expect(
+      runCodex(directory, 'prompt', {}, 'walkthrough.json', 'Timed out.', {
+        onMetrics: (value) => metrics.push(value),
+      }),
+    ).resolves.toBe('{"version":1}');
+
+    expect(metrics).toEqual([
+      {
+        transport: 'exec',
+        usage: {
+          cachedInputTokens: 80,
+          inputTokens: 100,
+          outputTokens: 25,
+          reasoningOutputTokens: 10,
+          totalTokens: 125,
+        },
+      },
+    ]);
   } finally {
     if (previousCodexPath == null) {
       delete process.env.CODIFF_CODEX_PATH;

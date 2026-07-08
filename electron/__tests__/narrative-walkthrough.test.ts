@@ -95,6 +95,7 @@ const files = [
 
 test('reports only the long-running walkthrough generation phases', async () => {
   const phases: Array<string> = [];
+  let runOptions: any;
   const state = {
     branch: 'main',
     files,
@@ -107,7 +108,29 @@ test('reports only the long-running walkthrough generation phases', async () => 
     id: 'codex',
     isNotFoundError: () => false,
     label: 'Codex',
-    run: async () => JSON.stringify(baseInput()),
+    run: async (
+      _root: string,
+      _prompt: string,
+      _schema: unknown,
+      _outputName: string,
+      _timeoutMessage: string,
+      options: unknown,
+    ) => {
+      runOptions = options;
+      return JSON.stringify({
+        ...baseInput(),
+        chapters: [
+          {
+            ...baseInput().chapters[0],
+            stops: [
+              { ...baseInput().chapters[0].stops[0], hunkIds: ['h1'] },
+              { ...baseInput().chapters[0].stops[1], hunkIds: ['h2'] },
+            ],
+          },
+        ],
+        support: [{ hunkIds: ['h3'], id: 'lock', reason: 'Lockfile' }],
+      });
+    },
   };
 
   await expect(
@@ -119,9 +142,33 @@ test('reports only the long-running walkthrough generation phases', async () => 
       },
       null,
     ),
-  ).resolves.toMatchObject({ status: 'ready' });
+  ).resolves.toMatchObject({
+    status: 'ready',
+    walkthrough: {
+      chapters: [
+        {
+          stops: [
+            { hunkIds: ['src/App.tsx:staged:h1'] },
+            { hunkIds: ['src/__tests__/hunkNavigation.test.ts:staged:h1'] },
+          ],
+        },
+      ],
+      support: [
+        { hunkIds: ['pnpm-lock.yaml:staged:h1'] },
+        {
+          hunkIds: [
+            'wide.py:staged:h1',
+            'wide.py:staged:h2',
+            'wide.py:staged:h3',
+            'wide.py:staged:h4',
+          ],
+        },
+      ],
+    },
+  });
 
   expect(phases).toEqual(['agent-generation', 'response-received']);
+  expect(runOptions.reasoningEffort).toBe('low');
 });
 
 const baseInput = () => ({
@@ -183,6 +230,7 @@ test('derives an OpenAI strict-compatible response schema', () => {
   expect(narrativeWalkthroughResponseSchema.properties.source).toBeUndefined();
   expect(narrativeWalkthroughResponseSchema.properties.commit.required).toEqual(['body', 'title']);
   expect(narrativeWalkthroughResponseSchema.properties.commit.type).toContain('null');
+  expect(narrativeWalkthroughResponseSchema.properties.support).toBeUndefined();
 
   const chapters = narrativeWalkthroughResponseSchema.properties.chapters;
   const stopProperties = chapters.items.properties.stops.items.properties;
@@ -193,11 +241,13 @@ test('derives an OpenAI strict-compatible response schema', () => {
   expect(stopProperties.deleted).toBeUndefined();
   expect(stopProperties.path).toBeUndefined();
   expect(stopProperties.status).toBeUndefined();
-  expect(stopProperties.changeType.type).toContain('null');
-  expect(stopProperties.changeType.enum).toContain(null);
+  expect(stopProperties.changeType).toBeUndefined();
+  expect(stopProperties.commitNote).toBeUndefined();
+  expect(stopProperties.notes).toBeUndefined();
+  expect(stopProperties.summary).toBeUndefined();
+  expect(stopProperties.title).toBeUndefined();
   expect(stopProperties.hunkIds.minItems).toBe(1);
   expect(stopProperties.hunkIds.maxItems).toBe(14);
-  expect(stopProperties.notes.items.required).toEqual(['body', 'hunkId']);
   expect(stopProperties.comments).toBeUndefined();
 });
 
@@ -215,17 +265,17 @@ test('prompts generated walkthroughs to use deterministic hunk groups', () => {
   });
 
   expect(prompt).toContain('digest has 28 files');
-  expect(prompt).toContain('Target 7-12 main-path stops');
+  expect(prompt).toContain('Target 6-9 main-path stops');
   expect(prompt).toContain('Define chapters[] in display order');
   expect(prompt).toContain('Default to one review idea per stop');
-  expect(prompt).toContain('A stop or support item may contain at most 14 hunkIds');
+  expect(prompt).toContain('A stop may contain at most 14 hunkIds');
   expect(prompt).toContain('Use multiple hunkIds when the prose needs those hunks read together');
+  expect(prompt).toContain('compact request-local aliases');
   expect(prompt).toContain('Generated-like files have "generated": true');
   expect(prompt).toContain('Never split them');
   expect(prompt).toContain('main-path them only when they explain behavior');
   expect(prompt).toContain('Put hunkIds in the exact display order');
-  expect(prompt).toContain('Use notes[] on a stop/support item');
-  expect(prompt).not.toContain('comments[]');
+  expect(prompt).toContain('automatically places every unreferenced hunk in support');
   expect(prompt).toContain('include commit.title and commit.body by default');
 });
 
@@ -314,7 +364,6 @@ test('prompts generated walkthroughs with custom user guidance without replacing
 
   expect(prompt).toContain('Custom walkthrough instructions:');
   expect(prompt).toContain('Answer in Japanese and use concise reviewer-facing explanations.');
-  expect(prompt).toContain('Current Codiff walkthrough guide:');
   expect(prompt).toContain('Return JSON only.');
   expect(prompt).toContain('Repository change digest:');
 });
@@ -351,7 +400,7 @@ test('prompts generated walkthroughs with PR descriptions as orientation only', 
     },
   });
 
-  expect(prompt).toContain('"description": "## Intent\\n\\nKeep reviewers oriented."');
+  expect(prompt).toContain('"description":"## Intent\\n\\nKeep reviewers oriented."');
   expect(prompt).toContain('author-written PR/MR intent and orientation');
   expect(prompt).toContain('not proof of behavior');
   expect(prompt).toContain(
@@ -378,7 +427,7 @@ test('truncates long PR descriptions in generated walkthrough prompts', () => {
   expect(prompt).not.toContain('UNTRUNCATED_TAIL');
 });
 
-test('repository digest exposes deterministic hunk ids and counts', () => {
+test('repository digest exposes compact hunk aliases and counts', () => {
   const prompt = buildNarrativeWalkthroughPrompt({
     branch: 'main',
     files: files.slice(0, 1),
@@ -387,9 +436,10 @@ test('repository digest exposes deterministic hunk ids and counts', () => {
     source: { type: 'working-tree' },
   });
 
-  expect(prompt).toContain('"id": "src/App.tsx:staged:h1"');
-  expect(prompt).toContain('"added": 1');
-  expect(prompt).toContain('"deleted": 1');
+  expect(prompt).toContain('"id":"h1"');
+  expect(prompt).not.toContain('"id":"src/App.tsx:staged:h1"');
+  expect(prompt).toContain('"added":1');
+  expect(prompt).toContain('"deleted":1');
   expect(prompt).toContain('Do not provide added/deleted counts');
 });
 
@@ -414,12 +464,12 @@ test('repository digest collapses generated files to one synthetic hunk', () => 
     source: { type: 'working-tree' },
   });
 
-  expect(prompt).toContain('"generated": true');
-  expect(prompt).toContain('"id": "pnpm-lock.yaml:staged:h1"');
-  expect(prompt).toContain('"kind": "synthetic"');
-  expect(prompt).toContain('"added": 18');
-  expect(prompt).toContain('"deleted": 18');
-  expect(prompt).not.toContain('"id": "pnpm-lock.yaml:staged:h2"');
+  expect(prompt).toContain('"generated":true');
+  expect(prompt).toContain('"id":"h1"');
+  expect(prompt).toContain('"kind":"synthetic"');
+  expect(prompt).toContain('"added":18');
+  expect(prompt).toContain('"deleted":18');
+  expect(prompt).not.toContain('"id":"h2"');
 });
 
 test('repository digest exposes synthetic hunk ids for non-text sections', () => {
@@ -446,9 +496,9 @@ test('repository digest exposes synthetic hunk ids for non-text sections', () =>
     source: { type: 'working-tree' },
   });
 
-  expect(prompt).toContain('"id": "public/logo.png:staged:h1"');
-  expect(prompt).toContain('"kind": "synthetic"');
-  expect(prompt).toContain('"summary": "Binary file changed."');
+  expect(prompt).toContain('"id":"h1"');
+  expect(prompt).toContain('"kind":"synthetic"');
+  expect(prompt).toContain('"summary":"Binary file changed."');
 });
 
 test('repository digest exposes synthetic hunk ids for metadata-only renames', () => {
@@ -475,8 +525,8 @@ test('repository digest exposes synthetic hunk ids for metadata-only renames', (
     source: { type: 'working-tree' },
   });
 
-  expect(prompt).toContain('"id": "new.txt:staged:h1"');
-  expect(prompt).toContain('"kind": "synthetic"');
+  expect(prompt).toContain('"id":"h1"');
+  expect(prompt).toContain('"kind":"synthetic"');
 });
 
 test('normalizes a well-formed narrative walkthrough', () => {

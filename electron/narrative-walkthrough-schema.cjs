@@ -113,6 +113,44 @@ const narrativeWalkthroughSchema = {
   type: 'object',
 };
 
+// Agent generation only needs the fields that define the review path. Codiff
+// derives support groups and all display metadata from the live diff.
+const narrativeWalkthroughGenerationSchema = {
+  additionalProperties: false,
+  properties: {
+    commit: narrativeWalkthroughSchema.properties.commit,
+    chapters: {
+      ...narrativeWalkthroughSchema.properties.chapters,
+      items: {
+        ...narrativeWalkthroughSchema.properties.chapters.items,
+        properties: {
+          ...narrativeWalkthroughSchema.properties.chapters.items.properties,
+          stops: {
+            ...narrativeWalkthroughSchema.properties.chapters.items.properties.stops,
+            items: {
+              additionalProperties: false,
+              properties: {
+                hunkIds: hunkGroupProperties.hunkIds,
+                id: hunkGroupProperties.id,
+                importance: { enum: [...IMPORTANCES], type: 'string' },
+                prose: { type: 'string' },
+              },
+              required: ['id', 'hunkIds', 'importance', 'prose'],
+              type: 'object',
+            },
+          },
+        },
+      },
+    },
+    focus: narrativeWalkthroughSchema.properties.focus,
+    kind: narrativeWalkthroughSchema.properties.kind,
+    title: narrativeWalkthroughSchema.properties.title,
+    version: narrativeWalkthroughSchema.properties.version,
+  },
+  required: ['version', 'kind', 'title', 'focus', 'chapters'],
+  type: 'object',
+};
+
 const toArray = (value) => (Array.isArray(value) ? value : value == null ? [] : [value]);
 
 /**
@@ -165,7 +203,9 @@ const strictResponseSchema = (schema, optional = false) => {
   return next;
 };
 
-const narrativeWalkthroughResponseSchema = strictResponseSchema(narrativeWalkthroughSchema);
+const narrativeWalkthroughResponseSchema = strictResponseSchema(
+  narrativeWalkthroughGenerationSchema,
+);
 
 module.exports = {
   AGENTS,

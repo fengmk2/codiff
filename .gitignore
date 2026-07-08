@@ -5,6 +5,7 @@
 core/node_modules/
 coverage/
 dist/
+/evals/runs/
 out/
 source_strings.json
 src/translations

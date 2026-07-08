@@ -2,8 +2,6 @@
 
 // Narrative walkthrough generation and normalization trust boundary.
 
-const { readFileSync } = require('node:fs');
-const { dirname, join } = require('node:path');
 const {
   cleanText,
   normalizeEnum,
@@ -43,7 +41,6 @@ const {
  * @typedef {import('./agent.cjs').AgentOptions} AgentOptions
  */
 
-const root = dirname(__dirname);
 const MAX_PROSE_CHARS = 4_000;
 const MAX_TOTAL_PATCH_CHARS = 60_000;
 const MAX_LARGE_TOTAL_PATCH_CHARS = 35_000;
@@ -135,14 +132,23 @@ const defaultSideForStatus = (status) => {
   return 'both';
 };
 
-/** @param {ReadonlyArray<ChangedFile>} files */
-const indexFiles = (files) => {
+/**
+ * @param {ReadonlyArray<ChangedFile>} files
+ * @param {ReadonlyMap<string, string>} [hunkIdByAlias]
+ */
+const indexFiles = (files, hunkIdByAlias = new Map()) => {
   const hunkById = new Map();
   for (const file of files) {
     for (const section of file.sections || []) {
       for (const hunk of getSectionWalkthroughHunks(file, section)) {
         hunkById.set(hunk.id, hunk);
       }
+    }
+  }
+  for (const [alias, hunkId] of hunkIdByAlias) {
+    const hunk = hunkById.get(hunkId);
+    if (hunk) {
+      hunkById.set(alias, hunk);
     }
   }
 
@@ -205,9 +211,14 @@ const normalizeHunk = (hunk) => {
   return normalized;
 };
 
-/** @param {any} note @param {ReadonlySet<string>} hunkIds */
-const normalizeHunkNote = (note, hunkIds) => {
-  const hunkId = oneLine(note?.hunkId);
+/**
+ * @param {any} note
+ * @param {ReadonlySet<string>} hunkIds
+ * @param {ReturnType<typeof indexFiles>} index
+ */
+const normalizeHunkNote = (note, hunkIds, index) => {
+  const requestedHunkId = oneLine(note?.hunkId);
+  const hunkId = index.hunkById.get(requestedHunkId)?.id || requestedHunkId;
   const body = cleanText(note?.body);
   if (!hunkId || !body || !hunkIds.has(hunkId)) {
     return null;
@@ -260,7 +271,7 @@ const normalizeHunkGroup = (item, fallbackId, index) => {
   const notes = [];
   const notedHunkIds = new Set();
   for (const note of Array.isArray(item?.notes) ? item.notes : []) {
-    const normalizedNote = normalizeHunkNote(note, selectedHunkIds);
+    const normalizedNote = normalizeHunkNote(note, selectedHunkIds, index);
     if (!normalizedNote || notedHunkIds.has(normalizedNote.hunkId)) {
       continue;
     }
@@ -377,10 +388,12 @@ const normalizeAuthoredSupport = (input, index, coveredHunkIds, itemIds) => {
 
 const addUnreferencedSupport = (support, index, coveredHunkIds, itemIds) => {
   const groupsByPath = new Map();
+  const seenHunkIds = new Set();
   for (const hunk of index.hunkById.values()) {
-    if (coveredHunkIds.has(hunk.id)) {
+    if (coveredHunkIds.has(hunk.id) || seenHunkIds.has(hunk.id)) {
       continue;
     }
+    seenHunkIds.add(hunk.id);
     const groups = groupsByPath.get(hunk.path) || [];
     groups.push(hunk);
     groupsByPath.set(hunk.path, groups);
@@ -413,7 +426,7 @@ const addUnreferencedSupport = (support, index, coveredHunkIds, itemIds) => {
   }
 };
 
-const normalizeNarrativeWalkthrough = (input, files, facts = {}) => {
+const normalizeNarrativeWalkthrough = (input, files, facts = {}, hunkIdByAlias = new Map()) => {
   if (!input || typeof input !== 'object') {
     throw new Error('Narrative walkthrough is not an object.');
   }
@@ -423,7 +436,7 @@ const normalizeNarrativeWalkthrough = (input, files, facts = {}) => {
     );
   }
 
-  const index = indexFiles(files);
+  const index = indexFiles(files, hunkIdByAlias);
   const coveredHunkIds = new Set();
   const { chapters, itemIds, stopCount } = normalizeChapters(input, index, coveredHunkIds);
   if (chapters.length === 0 || stopCount === 0) {
@@ -507,13 +520,16 @@ const buildPatchExcerpt = (section, remainingBudget, sectionPatchBudget) => {
 /** @param {number} start @param {number} end */
 const formatPromptLineRange = (start, end) => (start === end ? `${start}` : `${start}-${end}`);
 
-/** @param {ReturnType<typeof getSectionWalkthroughHunks>[number]} hunk */
-const buildPromptHunkInput = (hunk) => {
+/**
+ * @param {ReturnType<typeof getSectionWalkthroughHunks>[number]} hunk
+ * @param {string} id
+ */
+const buildPromptHunkInput = (hunk, id) => {
   if (isSyntheticWalkthroughHunk(hunk)) {
     return {
       added: hunk.added,
       deleted: hunk.deleted,
-      id: hunk.id,
+      id,
       kind: 'synthetic',
       summary: hunk.summary,
     };
@@ -523,7 +539,7 @@ const buildPromptHunkInput = (hunk) => {
     added: hunk.added,
     deleted: hunk.deleted,
     header: hunk.header,
-    id: hunk.id,
+    id,
     kind: 'patch',
     newLines: formatPromptLineRange(hunk.additionStart, hunk.additionEnd),
     oldLines: formatPromptLineRange(hunk.deletionStart, hunk.deletionEnd),
@@ -545,9 +561,11 @@ const getPromptPatchBudgets = (fileCount) =>
 /** @param {RepositoryState} state */
 const buildPromptInput = (state) => {
   const patchBudget = getPromptPatchBudgets(state.files.length);
+  const hunkIdByAlias = new Map();
+  let nextHunkAlias = 1;
   let remainingPatchBudget = patchBudget.total;
 
-  return {
+  const input = {
     branch: state.branch,
     files: state.files.map((file) => {
       const generated = isGeneratedWalkthroughPath(file.path);
@@ -568,7 +586,12 @@ const buildPromptInput = (state) => {
             patchBudget.section,
           );
           remainingPatchBudget = Math.max(0, remainingPatchBudget - patchExcerpt.length);
-          const hunks = getSectionWalkthroughHunks(file, section).map(buildPromptHunkInput);
+          const hunks = getSectionWalkthroughHunks(file, section).map((hunk) => {
+            const alias = `h${nextHunkAlias}`;
+            nextHunkAlias += 1;
+            hunkIdByAlias.set(alias, hunk.id);
+            return buildPromptHunkInput(hunk, alias);
+          });
 
           return {
             binary: section.binary,
@@ -590,6 +613,8 @@ const buildPromptInput = (state) => {
         ? { ...state.source, description: truncate(state.source.description, MAX_PROSE_CHARS) }
         : state.source,
   };
+
+  return { hunkIdByAlias, input };
 };
 
 const buildWalkthroughContextInput = (context, agentLabel) =>
@@ -611,7 +636,7 @@ const buildCustomPromptInput = (customPrompt) => {
     ? `Custom walkthrough instructions:
 ${prompt}
 
-Use these instructions to customize language, tone, and review detail. If they conflict with the JSON schema, current Codiff walkthrough guide, repository digest, hunk ids, or review-order constraints above, keep Codiff's constraints and the digest as the source of truth.
+Use these instructions to customize language, tone, and review detail. If they conflict with the JSON schema, repository digest, hunk ids, or review-order constraints above, keep Codiff's constraints and the digest as the source of truth.
 `
     : '';
 };
@@ -660,7 +685,7 @@ const buildWalkthroughSizingGuidance = (state) => {
           ? '1-3'
           : fileCount <= 16
             ? '5-9'
-            : '7-12';
+            : '6-9';
   const targetChapters =
     fileCount <= 2
       ? '1'
@@ -670,53 +695,60 @@ const buildWalkthroughSizingGuidance = (state) => {
   const targetChapterInstruction =
     targetChapters === '1' ? '1 story chapter' : `${targetChapters} story chapters`;
   return `Coverage contract:
-- The digest has ${fileCount} files and ${hunkCount} reviewable hunks. Cover the changed hunks a reviewer should see, and put secondary/mechanical hunks in support[] rather than hiding them.
+- The digest has ${fileCount} files and ${hunkCount} reviewable hunks. Put the highest-leverage review path in chapters[]; Codiff preserves everything else as support.
+- Digest hunk ids are compact request-local aliases like h1 and h2. Return those aliases exactly; Codiff maps them back to stable live-diff ids.
 - Define chapters[] in display order. Inside each chapter, define stops[] in display order.
-- Use stable item ids like s1, s2, ... for main stops and support-1, support-2, ... for supporting groups. Do not invent hunk ids.
+- Use stable item ids like s1, s2, ... for main stops. Do not invent hunk ids.
 - Default to one review idea per stop. Include multiple hunkIds when the hunks implement the same idea, especially in small diffs.
 
 Grouping contract:
-- Target ${targetStops} main-path stops and at most ${MAX_WALKTHROUGH_STOPS}.
+- Target ${targetStops} main-path stops and at most ${MAX_WALKTHROUGH_STOPS}. Prefer the low end when it still preserves distinct state transitions, submission paths, or runtime contracts.
 - Use ${targetChapterInstruction}. A chapter is a conceptual group, not a file. For one- or two-file diffs, prefer one chapter unless there are clearly separate review phases.
 - Chapter titles render in a compact top bar: keep each title to 1-2 short words and at most 16 characters, e.g. "UI", "CLI", "Tests", "Docs", "Runtime", "Cleanup".
-- A stop or support item may contain at most ${MAX_HUNKS_PER_WALKTHROUGH_GROUP} hunkIds. Use multiple hunkIds when the prose needs those hunks read together to understand one invariant, behavior, or repeated pattern.
+- A stop may contain at most ${MAX_HUNKS_PER_WALKTHROUGH_GROUP} hunkIds. Use multiple hunkIds when the prose needs those hunks read together to understand one invariant, behavior, or repeated pattern.
 - Generated-like files have "generated": true and one synthetic hunk per changed section. Never split them; main-path them only when they explain behavior, like snapshots proving output.
 - For 1-4 total hunks, usually write 1-2 stops. Similar same-file hunks should usually be one stop with multiple hunkIds, not separate chapters or stops.
 - Split distant same-file hunks into separate consecutive stops when they deserve separate prose. Do not make a chapter-sized stop.
+- Do not group a whole large file into one stop when its hunks implement distinct workflows, state transitions, or submission paths.
 - Put hunkIds in the exact display order you want Codiff to render. Out-of-line and cross-file order is allowed when it improves reviewer comprehension.
-- Use notes[] on a stop/support item for short per-hunk header notes: each note is { hunkId, body } and hunkId must be one of that item's hunkIds.
 - Do not provide added/deleted counts, status, oldPath, section ids, display labels, path, repo, source, generatedAt, agent, or meta; Codiff computes those.
-- Put secondary, mechanical, docs-only, or repeated-pattern hunks in support[], grouped by reason.
+- Leave secondary, mechanical, docs-only, generated, styling, fixture, and repeated-pattern hunks out of chapters[]. Codiff automatically places every unreferenced hunk in support.
 - For working-tree sources, include commit.title and commit.body by default unless there are no commit-worthy files. Put the subject line in commit.title, not as the first line of commit.body.
 `;
 };
 
-const buildNarrativeWalkthroughPrompt = (
-  state,
-  context,
-  agentLabel = 'Codex',
-  customPrompt,
-) => `You are authoring Codiff's narrative walkthrough JSON.
+const buildNarrativeWalkthroughRequest = (state, context, agentLabel = 'Codex', customPrompt) => {
+  const { hunkIdByAlias, input } = buildPromptInput(state);
+  return {
+    hunkIdByAlias,
+    prompt: `You are authoring Codiff's narrative walkthrough JSON.
 
-Return JSON only. Do not inspect the repository or run shell commands; use only the guide, optional conversation context, and repository digest below.
+Return JSON only. Do not inspect the repository or run shell commands; use only the optional conversation context and repository digest below.
 If source.description is present, treat it as author-written PR/MR intent and orientation, not proof of behavior. The changed files, patches, and hunk data remain the source of truth for what changed.
 
 ${buildWalkthroughSizingGuidance(state)}
 
-Current Codiff walkthrough guide:
-${readFileSync(join(root, 'bin/walkthrough-guide.md'), 'utf8').trim()}
-
 ${buildWalkthroughContextInput(context, agentLabel)}
 ${buildCustomPromptInput(customPrompt)}
 Repository change digest:
-${JSON.stringify(buildPromptInput(state), null, 2)}
-`;
+${JSON.stringify(input)}
+`,
+  };
+};
+
+const buildNarrativeWalkthroughPrompt = (state, context, agentLabel = 'Codex', customPrompt) =>
+  buildNarrativeWalkthroughRequest(state, context, agentLabel, customPrompt).prompt;
 
 const readNarrativeWalkthrough = async (state, agent, agentOptions, context, customPrompt) => {
   try {
     const timeoutMs = getNarrativeWalkthroughTimeoutMs(state, agent.defaultTimeoutMs);
     const { fileCount, hunkCount } = getWalkthroughSize(state);
-    const prompt = buildNarrativeWalkthroughPrompt(state, context, agent.label, customPrompt);
+    const { hunkIdByAlias, prompt } = buildNarrativeWalkthroughRequest(
+      state,
+      context,
+      agent.label,
+      customPrompt,
+    );
     agentOptions?.onProgress?.('agent-generation');
     const response = await agent.run(
       state.root,
@@ -724,17 +756,27 @@ const readNarrativeWalkthrough = async (state, agent, agentOptions, context, cus
       narrativeWalkthroughResponseSchema,
       'walkthrough.json',
       `${agent.label} walkthrough timed out after ${Math.ceil(timeoutMs / 1_000)} seconds while processing ${fileCount} files and ${hunkCount} reviewable hunks.`,
-      { ...agentOptions, timeoutMs },
+      {
+        ...agentOptions,
+        reasoningEffort:
+          agentOptions?.reasoningEffort ?? (agent.id === 'codex' ? 'low' : undefined),
+        timeoutMs,
+      },
     );
     agentOptions?.onProgress?.('response-received');
     const parsed = parseJSONMessage(response);
-    const walkthrough = normalizeNarrativeWalkthrough(parsed, state.files, {
-      agent: agent.id,
-      branch: state.branch,
-      generatedAt: state.generatedAt,
-      root: state.root,
-      source: state.source,
-    });
+    const walkthrough = normalizeNarrativeWalkthrough(
+      parsed,
+      state.files,
+      {
+        agent: agent.id,
+        branch: state.branch,
+        generatedAt: state.generatedAt,
+        root: state.root,
+        source: state.source,
+      },
+      hunkIdByAlias,
+    );
     if (context && !walkthrough.context) {
       walkthrough.context = context;
     }

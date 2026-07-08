@@ -14,9 +14,20 @@ const { readPiSessionContext } = require('./pi-session-context.cjs');
  * @typedef {{
  *   fallbackModel?: string;
  *   model?: string;
+ *   onMetrics?: (metrics: {
+ *     transport: 'app-server' | 'exec';
+ *     usage?: {
+ *       cachedInputTokens: number;
+ *       inputTokens: number;
+ *       outputTokens: number;
+ *       reasoningOutputTokens: number;
+ *       totalTokens: number;
+ *     };
+ *   }) => void;
  *   onModelFallback?: (fallbackModel: string, originalModel: string) => Promise<void> | void;
  *   onPartialText?: (delta: string) => void;
  *   onProgress?: (phase: import('../core/types.ts').WalkthroughProgressPhase) => void;
+ *   reasoningEffort?: 'low' | 'medium' | 'high';
  *   timeoutMs?: number;
  * }} AgentOptions
  * @typedef {{

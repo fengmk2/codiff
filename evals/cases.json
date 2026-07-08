@@ -1,0 +1,35 @@
+[
+  {
+    "id": "small",
+    "size": "small",
+    "commit": "c0adcf73452527dcbe0a75427a347182be5e687d",
+    "rubric": [
+      "Explains that identical author and committer metadata is rendered as one combined row.",
+      "Identifies the equality contract as matching name, email, and date.",
+      "Preserves the separate Author and Committer rows when any identity field differs.",
+      "Keeps the tiny UI change compact and does not invent tests, behavior, or risk absent from the diff."
+    ]
+  },
+  {
+    "id": "medium",
+    "size": "medium",
+    "commit": "7e71d5f498f8db1252bb5c1152abf29bb78b1f0a",
+    "rubric": [
+      "Explains the end-to-end walkthrough progress flow from agent events through Electron IPC to renderer state.",
+      "Covers the backend-specific streaming implementations for Codex, Claude Code, and OpenCode, including fallback behavior where material.",
+      "Identifies stale-generation protection and the semantic analyzing-versus-response progress phases.",
+      "Prioritizes the runtime behavior and its regression tests over styling and repetitive fixture changes."
+    ]
+  },
+  {
+    "id": "large",
+    "size": "large",
+    "commit": "6354103ee1fa42ce4dfe38a4c83d2783a8279f8c",
+    "rubric": [
+      "Explains how the shared walkthrough surface becomes an interactive merge-request review experience.",
+      "Covers general comments, inline review comments, editing, submission, navigation, and review actions without flattening them into a file list.",
+      "Connects the shared app changes to extracted reusable diff, markdown, preference, and review helpers.",
+      "Distinguishes core behavior and tests from CSS, dependency, lockfile, and build-configuration support changes."
+    ]
+  }
+]
