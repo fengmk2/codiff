@@ -142,6 +142,7 @@ import type {
 const emptyWalkthroughNotes = new Map<string, WalkthroughNote>();
 const emptyFiles: ReadonlyArray<ChangedFile> = [];
 const walkthroughCodeViewBottomInset = 96;
+const disableCodeViewWorkerPool = process.env.NODE_ENV === 'test';
 type MainMode = 'review' | 'commit';
 const CODE_FONT_SIZE_DEFAULT = 13;
 const CODE_FONT_SIZE_MAX = 32;
@@ -2587,6 +2588,7 @@ export default function App() {
           blocks={blocks}
           bottomInset={walkthroughCodeViewBottomInset}
           commitMetadata={null}
+          disableWorkerPool={disableCodeViewWorkerPool}
           files={[]}
           forceExpandedPaths={diffSearchMatchPathSet}
           onActiveBlockChange={onActiveBlockChange}
@@ -2811,6 +2813,7 @@ export default function App() {
         ) : (
           <ReviewCodeView
             {...commonReviewProps}
+            disableWorkerPool={disableCodeViewWorkerPool}
             files={visibleFiles}
             forceExpandedPaths={diffSearchMatchPathSet}
             scrollTarget={scrollTarget}

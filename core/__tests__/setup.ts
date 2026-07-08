@@ -32,6 +32,31 @@ if (typeof HTMLElement !== 'undefined' && !HTMLElement.prototype.scrollTo) {
   HTMLElement.prototype.scrollTo = scrollTo;
 }
 
+if (typeof HTMLElement !== 'undefined') {
+  const getBoundingClientRect = HTMLElement.prototype.getBoundingClientRect;
+  HTMLElement.prototype.getBoundingClientRect = function getTestBoundingClientRect() {
+    const rect = getBoundingClientRect.call(this);
+
+    if (rect.height === 0 && this.classList.contains('code-view')) {
+      return new DOMRect(rect.x, rect.y, rect.width || 1024, 768);
+    }
+
+    return rect;
+  };
+}
+
+if (typeof ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class ResizeObserver {
+    constructor(_callback: ResizeObserverCallback) {}
+
+    disconnect() {}
+
+    observe() {}
+
+    unobserve() {}
+  };
+}
+
 if (typeof Range !== 'undefined') {
   Range.prototype.getBoundingClientRect ??= () => new DOMRect();
   Range.prototype.getClientRects ??= () => [] as unknown as DOMRectList;
