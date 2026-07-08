@@ -2520,6 +2520,23 @@ export default function App() {
   const diffLineHeight = getCodeFontLineHeight(
     normalizeCodeFontSizePreference(preferences.codeFontSize),
   );
+  const commitMetadata =
+    state.source.type === 'commit' && state.commitMetadata
+      ? (() => {
+          const historyAvatarUrl = historyEntries.find(
+            (entry) => entry.ref === state.commitMetadata?.ref,
+          )?.gravatarUrl;
+          return historyAvatarUrl
+            ? {
+                ...state.commitMetadata,
+                author: {
+                  ...state.commitMetadata.author,
+                  gravatarUrl: historyAvatarUrl,
+                },
+              }
+            : state.commitMetadata;
+        })()
+      : null;
   // Props shared by the full review and the per-stop scoped diffs, so the two
   // render paths can't drift apart.
   const commonReviewProps = {
@@ -2528,7 +2545,7 @@ export default function App() {
     agentLabel,
     collapsed,
     comments: visibleReviewComments,
-    commitMetadata: state.source.type === 'commit' ? (state.commitMetadata ?? null) : null,
+    commitMetadata,
     diffLineHeight,
     diffStyle,
     focusCommentId,

@@ -15,8 +15,6 @@ import { createChangedFile, createChangedFileWithPatch } from './helpers/fixture
 import { renderReact, setInputValue, waitFor } from './helpers/react.tsx';
 import {
   codeViewMock,
-  commitMetadata,
-  commitSource,
   resetCodeViewMock,
   ReviewCodeViewHarness,
   type ReviewDiffBlock,
@@ -764,63 +762,6 @@ test('scroll targets issue one command per request even before render visibility
     });
 
     expect(codeViewMock.scrollTo).toHaveBeenCalledTimes(1);
-  } finally {
-    if (root) {
-      await act(async () => root?.unmount());
-    }
-    container.remove();
-  }
-});
-
-test('commit metadata file rows scroll to the matching diff', async () => {
-  const container = document.createElement('div');
-  document.body.append(container);
-  let root: Root | null = null;
-
-  try {
-    await act(async () => {
-      root = createRoot(container);
-      root.render(
-        <ReviewCodeViewHarness
-          commitMetadata={commitMetadata}
-          files={[createChangedFile('src/first.ts'), createChangedFile('src/second.ts')]}
-          source={commitSource}
-        />,
-      );
-    });
-
-    const fileButtons = [...container.querySelectorAll<HTMLButtonElement>('.commit-details-file')];
-    const fileButton = fileButtons.find((button) => button.textContent?.includes('src/second.ts'));
-    if (!fileButton) {
-      throw new Error('Expected commit metadata file button.');
-    }
-    const hiddenFileButton = fileButtons.find((button) =>
-      button.textContent?.includes('src/hidden.ts'),
-    );
-    if (!hiddenFileButton) {
-      throw new Error('Expected hidden commit metadata file button.');
-    }
-
-    expect(hiddenFileButton.disabled).toBe(true);
-    expect(hiddenFileButton.title).toContain('hidden by current filters');
-
-    await act(async () => {
-      hiddenFileButton.click();
-    });
-
-    expect(codeViewMock.scrollTo).not.toHaveBeenCalled();
-
-    await act(async () => {
-      fileButton.click();
-    });
-
-    expect(codeViewMock.scrollTo).toHaveBeenCalledWith(
-      expect.objectContaining({
-        behavior: 'smooth',
-        id: 'diff:src/second.ts:unstaged',
-        type: 'item',
-      }),
-    );
   } finally {
     if (root) {
       await act(async () => root?.unmount());

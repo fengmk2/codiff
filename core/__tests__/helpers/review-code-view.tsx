@@ -3,7 +3,7 @@ import React, { type ComponentProps } from 'react';
 import { vi } from 'vite-plus/test';
 import { ReviewCodeView } from '../../app/components/ReviewCodeView.tsx';
 import { defaultKeymap } from '../../config/defaults.ts';
-import type { ChangedFile, CommitMetadata, ReviewSource } from '../../types.ts';
+import type { ChangedFile, ReviewSource } from '../../types.ts';
 
 export type { ReviewDiffBlock } from '../../app/components/ReviewCodeView.tsx';
 
@@ -133,52 +133,6 @@ vi.mock('@pierre/diffs/react', async () => {
 });
 
 export const source = { type: 'working-tree' } satisfies ReviewSource;
-export const commitSource = { ref: 'abc1234', type: 'commit' } satisfies ReviewSource;
-export const commitMetadata = {
-  author: {
-    date: '2026-01-01T12:00:00Z',
-    email: 'author@example.com',
-    name: 'Author',
-  },
-  body: '',
-  committer: {
-    date: '2026-01-01T12:00:00Z',
-    email: 'committer@example.com',
-    name: 'Committer',
-  },
-  files: [
-    {
-      additions: 1,
-      binary: false,
-      deletions: 1,
-      path: 'src/second.ts',
-      status: 'modified' as const,
-    },
-    {
-      additions: 1,
-      binary: false,
-      deletions: 0,
-      path: 'src/hidden.ts',
-      status: 'modified' as const,
-    },
-  ],
-  parents: ['parent-sha'],
-  ref: 'abc1234',
-  refs: ['main'],
-  shortRef: 'abc1234',
-  signature: {
-    status: 'N',
-  },
-  stats: {
-    additions: 2,
-    binaryFiles: 0,
-    deletions: 1,
-    files: 2,
-    renamedFiles: 0,
-  },
-  subject: 'Commit subject',
-  trailers: [],
-} satisfies CommitMetadata;
 
 type ReviewCodeViewHarnessProps = Partial<ComponentProps<typeof ReviewCodeView>> & {
   files: ReadonlyArray<ChangedFile>;

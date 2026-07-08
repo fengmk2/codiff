@@ -123,8 +123,8 @@ importers:
   core:
     dependencies:
       '@nkzw/mdx-editor':
-        specifier: ^0.2.0
-        version: 0.2.0(@codemirror/language@6.12.4)(@lezer/highlight@1.2.3)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)(yjs@13.6.31)
+        specifier: ^0.2.1
+        version: 0.2.1(@codemirror/language@6.12.4)(@lezer/highlight@1.2.3)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)(yjs@13.6.31)
       '@nkzw/use-relative-time':
         specifier: ^1.2.3
         version: 1.2.3(react@19.2.7)
@@ -1149,8 +1149,8 @@ packages:
     peerDependencies:
       eslint: '>= 9'
 
-  '@nkzw/mdx-editor@0.2.0':
-    resolution: {integrity: sha512-w0bFHNb29mA99JPaUWWdB/l2qmlUXbqoOW15UFnHrrLEGb9nqhcwSuNkSDHjf7X55X3gmazzRrMA3y6lfeVQyA==}
+  '@nkzw/mdx-editor@0.2.1':
+    resolution: {integrity: sha512-P/9HFL9+/ShGkCngGpJfHW68DAtqvbFVTURYOjnLeyjKthfFmTtTyWJ10QWIUz750P0nNHfD82J9IVD8RXU5Ug==}
     peerDependencies:
       react: '>=18'
       react-dom: '>=18'
@@ -7308,7 +7308,7 @@ snapshots:
     dependencies:
       eslint: 9.39.2(jiti@2.7.0)
 
-  '@nkzw/mdx-editor@0.2.0(@codemirror/language@6.12.4)(@lezer/highlight@1.2.3)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)(yjs@13.6.31)':
+  '@nkzw/mdx-editor@0.2.1(@codemirror/language@6.12.4)(@lezer/highlight@1.2.3)(@types/react-dom@19.2.3(@types/react@19.2.17))(@types/react@19.2.17)(react-dom@19.2.7(react@19.2.7))(react@19.2.7)(typescript@6.0.3)(yjs@13.6.31)':
     dependencies:
       '@codemirror/commands': 6.10.4
       '@codemirror/lang-markdown': 6.5.0

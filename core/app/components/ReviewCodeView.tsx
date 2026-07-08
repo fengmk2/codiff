@@ -103,11 +103,6 @@ import type {
   ReviewAuthor,
   ReviewSource,
 } from '../../types.ts';
-import {
-  CommitDetailsHeader,
-  CommitDetailsPanel,
-  type CommitDetailsFile,
-} from './CommitDetails.tsx';
 import { Gravatar } from './Gravatar.tsx';
 import {
   RepositoryMarkdownEditor,
@@ -449,7 +444,21 @@ const getPullRequestDescriptionLabel = (source: Extract<ReviewSource, { type: 'p
     : source.provider === 'gitlab'
       ? 'MR description'
       : 'Description';
-const getSourceAuthorDisplayName = (author: ReviewAuthor) => author.name || `@${author.login}`;
+type SourceDescriptionAuthor = {
+  avatarUrl?: string;
+  displayName: string;
+  title?: string;
+};
+const getPullRequestDescriptionAuthor = (author: ReviewAuthor): SourceDescriptionAuthor => ({
+  avatarUrl: author.avatarUrl,
+  displayName: author.name || `@${author.login}`,
+  title: `@${author.login}`,
+});
+const getCommitDescriptionAuthor = (author: CommitMetadata['author']): SourceDescriptionAuthor => ({
+  avatarUrl: author.gravatarUrl,
+  displayName: author.name || author.email || 'Unknown author',
+  title: author.email || undefined,
+});
 const htmlCommentPattern = /<!--[\s\S]*?-->/g;
 const stripHtmlComments = (value: string) => value.replaceAll(htmlCommentPattern, '');
 type PullRequestSource = Extract<ReviewSource, { type: 'pull-request' }>;
@@ -631,6 +640,7 @@ function SourceDescriptionHeader({
 }
 
 function SourceDescriptionBody({
+  ariaLabel = 'Preview source description',
   author,
   canEdit,
   description,
@@ -640,7 +650,8 @@ function SourceDescriptionBody({
   onUpdateDescription,
   onUploadDescriptionAsset,
 }: {
-  author?: ReviewAuthor;
+  ariaLabel?: string;
+  author?: SourceDescriptionAuthor;
   canEdit?: boolean;
   description: string;
   keymap?: CodiffKeymap;
@@ -772,22 +783,16 @@ function SourceDescriptionBody({
       }`}
     >
       {author ? (
-        <Gravatar
-          fallback={getSourceAuthorDisplayName(author)}
-          size="medium"
-          url={author.avatarUrl}
-        />
+        <Gravatar fallback={author.displayName} size="medium" url={author.avatarUrl} />
       ) : null}
       <div className="review-comment-body source-description-body">
         {author || canEditDescription || editing ? (
           <div
             className={`review-comment-header read-only source-description-author-header${
               canEditDescription || editing ? ' with-comment-action' : ''
-            }`}
+            }${!sanitizedDescription && !editing ? ' without-description' : ''}`}
           >
-            <strong title={author ? `@${author.login}` : undefined}>
-              {author ? getSourceAuthorDisplayName(author) : 'Description'}
-            </strong>
+            <strong title={author?.title}>{author ? author.displayName : 'Description'}</strong>
             {editing ? (
               <span className="general-comment-edit-actions">
                 <button
@@ -826,7 +831,7 @@ function SourceDescriptionBody({
               <Suspense
                 fallback={
                   <ReadOnlyMarkdown
-                    ariaLabel="Preview source description"
+                    ariaLabel={ariaLabel}
                     className="codiff-markdown-preview-editor source-description-markdown-editor source-description-edit-preview"
                     density="compact"
                     onHeightChange={() => onLayoutReady(layoutKey)}
@@ -842,7 +847,7 @@ function SourceDescriptionBody({
                 >
                   {!editEditorReady ? (
                     <ReadOnlyMarkdown
-                      ariaLabel="Preview source description"
+                      ariaLabel={ariaLabel}
                       className="codiff-markdown-preview-editor source-description-markdown-editor source-description-edit-preview"
                       density="compact"
                       onHeightChange={() => onLayoutReady(layoutKey)}
@@ -873,10 +878,10 @@ function SourceDescriptionBody({
             </div>
             {editError ? <div className="review-comment-error">{editError}</div> : null}
           </>
-        ) : (
+        ) : sanitizedDescription ? (
           <div className="codiff-markdown-preview source-description-markdown">
             <ReadOnlyMarkdown
-              ariaLabel="Preview source description"
+              ariaLabel={ariaLabel}
               className="codiff-markdown-preview-editor source-description-markdown-editor"
               density="compact"
               onHeightChange={() => onLayoutReady(layoutKey)}
@@ -884,7 +889,7 @@ function SourceDescriptionBody({
               variant="embedded"
             />
           </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
@@ -910,6 +915,7 @@ export function PullRequestSourceDescription({
   const sourceDescription = source.description?.trim() ?? '';
   const sourceTitle = source.title?.trim() ?? '';
   const sourceDescriptionHasBody = sourceDescription.length > 0;
+  const sourceAuthor = source.author ? getPullRequestDescriptionAuthor(source.author) : undefined;
   const canEditDescription = source.canEditDescription === true && onUpdateDescription != null;
   const canEditTitle =
     (source.canEditTitle === true || source.canEditDescription === true) && onUpdateTitle != null;
@@ -937,7 +943,7 @@ export function PullRequestSourceDescription({
       {!isCollapsed ? (
         <div className="codiff-source-description-panel-body">
           <SourceDescriptionBody
-            author={source.author}
+            author={sourceAuthor}
             canEdit={canEditDescription}
             description={sourceDescription}
             keymap={keymap}
@@ -2026,27 +2032,6 @@ function ReviewAnnotation({
 }
 
 const scrollTargetRetryFrameLimit = 90;
-// Render commit details as a CodeView item so scrolling treats the panel like the diffs.
-const commitDetailsFileName = '__codiff_commit_details__';
-
-// Build an id from commit details that can change the panel height. When the panel first appears,
-// we change only layoutPass to make CodeView measure again; this id still means "same content."
-const getCommitDetailsContentKey = (metadata: CommitMetadata) =>
-  [
-    metadata.ref,
-    metadata.refs.join('\u0000'),
-    metadata.stats.files,
-    metadata.stats.additions,
-    metadata.stats.deletions,
-    metadata.stats.renamedFiles,
-    metadata.stats.binaryFiles,
-  ].join('\u0001');
-
-const getCommitDetailsVersionKey = (
-  metadata: CommitMetadata,
-  layoutPass: number,
-  navigationKey: string,
-) => [getCommitDetailsContentKey(metadata), layoutPass, navigationKey].join('\u0001');
 
 const getEffectiveScrollBehavior = (behavior: ReviewScrollBehavior) =>
   behavior === 'smooth' && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches
@@ -2459,7 +2444,6 @@ export function ReviewCodeView({
   const deferredTimersRef = useRef<Set<number>>(new Set());
   const handledScrollRequestRef = useRef<number | null>(null);
   const handledHunkNavRef = useRef<number | null>(hunkNavigation?.request ?? null);
-  const measuredCommitDetailsLayoutKeyRef = useRef<string | null>(null);
   const emptyCommentDeleteTimersRef = useRef<Map<string, number>>(new Map());
   const highlightFrameRef = useRef<number | null>(null);
   const ignoreNextLineSelectionEndRef = useRef(false);
@@ -2494,11 +2478,16 @@ export function ReviewCodeView({
   >({});
   const [selectedLines, setSelectedLines] = useState<CodeViewLineSelection | null>(null);
   const selectedLinesRef = useRef<CodeViewLineSelection | null>(null);
-  const commitRef = source.type === 'commit' ? source.ref : null;
-  const commitDetailsItemId = commitRef ? `commit-details:${commitRef}` : null;
+  const commitMessageMetadata = source.type === 'commit' ? commitMetadata : null;
+  const shouldShowCommitMessage = commitMessageMetadata != null;
   const shouldShowSourceDescription = showSourceDescription && source.type === 'pull-request';
-  const sourceDescription = shouldShowSourceDescription ? (source.description?.trim() ?? '') : '';
+  const sourceDescription = shouldShowCommitMessage
+    ? commitMessageMetadata.body.trim()
+    : shouldShowSourceDescription
+      ? (source.description?.trim() ?? '')
+      : '';
   const sourceDescriptionHasBody = sourceDescription.length > 0;
+  const sourceDescriptionHasContent = sourceDescriptionHasBody || shouldShowCommitMessage;
   const canEditSourceDescription =
     shouldShowSourceDescription &&
     source.canEditDescription === true &&
@@ -2507,32 +2496,36 @@ export function ReviewCodeView({
     shouldShowSourceDescription &&
     (source.canEditTitle === true || source.canEditDescription === true) &&
     onUpdateSourceTitle != null;
-  const sourceAuthor = shouldShowSourceDescription ? source.author : undefined;
-  const sourceTitle = shouldShowSourceDescription ? (source.title?.trim() ?? '') : '';
+  const sourceAuthor = shouldShowCommitMessage
+    ? getCommitDescriptionAuthor(commitMessageMetadata.author)
+    : shouldShowSourceDescription && source.author
+      ? getPullRequestDescriptionAuthor(source.author)
+      : undefined;
+  const sourceTitle = shouldShowCommitMessage
+    ? commitMessageMetadata.subject.trim() || commitMessageMetadata.shortRef
+    : shouldShowSourceDescription
+      ? (source.title?.trim() ?? '')
+      : '';
   const sourceDescriptionItemId =
-    shouldShowSourceDescription && (sourceDescription || sourceTitle)
-      ? `source-description:${source.provider ?? ''}:${source.url}`
-      : null;
-  const sourceDescriptionLabel =
-    source.type === 'pull-request' ? getPullRequestDescriptionLabel(source) : '';
-  const [commitDetailsLayoutPass, setCommitDetailsLayoutPass] = useState(0);
+    shouldShowCommitMessage && source.type === 'commit'
+      ? `commit-message:${source.ref}`
+      : shouldShowSourceDescription && (sourceDescription || sourceTitle)
+        ? `source-description:${source.provider ?? ''}:${source.url}`
+        : null;
+  const sourceDescriptionLabel = shouldShowCommitMessage
+    ? 'Commit'
+    : source.type === 'pull-request'
+      ? getPullRequestDescriptionLabel(source)
+      : '';
+  const sourceDescriptionAriaLabel = shouldShowCommitMessage
+    ? 'Preview commit message'
+    : 'Preview source description';
   const [sourceDescriptionLayoutPass, setSourceDescriptionLayoutPass] = useState(0);
-  const [commitDetailsCollapseState, setCommitDetailsCollapseState] = useState<{
-    collapsed: boolean;
-    itemId: string | null;
-  }>({
-    collapsed: false,
-    itemId: null,
-  });
-  const commitDetailsCollapsed =
-    commitDetailsCollapseState.itemId === commitDetailsItemId
-      ? commitDetailsCollapseState.collapsed
-      : false;
   const [collapsedSourceDescriptionItemId, setCollapsedSourceDescriptionItemId] = useState<
     string | null
   >(null);
   const sourceDescriptionCollapsed =
-    (!sourceDescriptionHasBody && !canEditSourceDescription) ||
+    (!sourceDescriptionHasContent && !canEditSourceDescription) ||
     collapsedSourceDescriptionItemId === sourceDescriptionItemId;
   const toggleSourceDescriptionCollapsed = useCallback(() => {
     setCollapsedSourceDescriptionItemId((current) =>
@@ -2581,29 +2574,11 @@ export function ReviewCodeView({
     }));
   }, []);
 
-  const markCommitDetailsLayoutReady = useCallback((layoutKey: string) => {
-    // After the panel appears, ask CodeView to measure it once. Repeated renders of the same
-    // commit details should not change the item version again.
-    if (measuredCommitDetailsLayoutKeyRef.current === layoutKey) {
-      return;
-    }
-
-    measuredCommitDetailsLayoutKeyRef.current = layoutKey;
-    setCommitDetailsLayoutPass((current) => current + 1);
-  }, []);
-
   const markSourceDescriptionLayoutReady = useCallback((_layoutKey: string) => {
     setSourceDescriptionLayoutPass((current) => current + 1);
   }, []);
 
-  useEffect(() => {
-    if (!commitDetailsItemId || !commitMetadata) {
-      measuredCommitDetailsLayoutKeyRef.current = null;
-    }
-  }, [commitDetailsItemId, commitMetadata]);
-
   const {
-    commitDetailsFiles,
     firstItemByBlockId,
     firstItemByPath,
     itemBlockId,
@@ -2620,7 +2595,7 @@ export function ReviewCodeView({
     const fontLayoutKey = `line-height:${diffLineHeight}`;
 
     if (sourceDescriptionItemId) {
-      const sourceDescriptionLayoutKey = `${sourceDescriptionItemId}:${sourceTitle}:${sourceDescription}:${sourceAuthor?.login ?? ''}:${sourceAuthor?.avatarUrl ?? ''}:${sourceDescriptionCollapsed ? 'collapsed' : 'open'}:${sourceDescriptionFooterKey ?? ''}`;
+      const sourceDescriptionLayoutKey = `${sourceDescriptionItemId}:${sourceTitle}:${sourceDescription}:${sourceAuthor?.displayName ?? ''}:${sourceAuthor?.title ?? ''}:${sourceAuthor?.avatarUrl ?? ''}:${sourceDescriptionCollapsed ? 'collapsed' : 'open'}:${sourceDescriptionFooterKey ?? ''}`;
       nextItems.push({
         annotations: [
           {
@@ -2629,6 +2604,7 @@ export function ReviewCodeView({
               header: (
                 <>
                   <SourceDescriptionBody
+                    ariaLabel={sourceDescriptionAriaLabel}
                     author={sourceAuthor}
                     canEdit={canEditSourceDescription}
                     description={sourceDescription}
@@ -2650,7 +2626,8 @@ export function ReviewCodeView({
           } satisfies LineAnnotation<ReviewAnnotationMetadata>,
         ].filter(
           () =>
-            (sourceDescriptionHasBody || canEditSourceDescription) && !sourceDescriptionCollapsed,
+            (sourceDescriptionHasContent || canEditSourceDescription) &&
+            !sourceDescriptionCollapsed,
         ),
         // The header (rendered via renderCustomHeader) carries the title; the body is the
         // collapsible content.
@@ -2659,7 +2636,7 @@ export function ReviewCodeView({
           cacheKey: sourceDescriptionLayoutKey,
           contents: ' ',
           lang: 'text',
-          name: 'source-description.md',
+          name: shouldShowCommitMessage ? 'commit-message.md' : 'source-description.md',
         },
         id: sourceDescriptionItemId,
         type: 'file',
@@ -2875,51 +2852,7 @@ export function ReviewCodeView({
       }
     }
 
-    // Keep all commit files visible, but only rows with rendered diff items can navigate.
-    const nextCommitDetailsFiles: ReadonlyArray<CommitDetailsFile> = commitMetadata
-      ? commitMetadata.files.map((file) => ({
-          ...file,
-          destinationItemId: nextFirstItemByPath.get(file.path) ?? null,
-        }))
-      : [];
-
-    if (commitMetadata && commitDetailsItemId) {
-      const navigationKey = nextCommitDetailsFiles
-        .map(
-          (file) => `${file.oldPath ?? ''}\u0000${file.path}\u0000${file.destinationItemId ?? ''}`,
-        )
-        .join('\u0001');
-      nextItems.unshift({
-        annotations: [
-          {
-            lineNumber: 1,
-            metadata: {
-              metadata: commitMetadata,
-              type: 'commit-details',
-            },
-          } satisfies LineAnnotation<ReviewAnnotationMetadata>,
-        ],
-        collapsed: commitDetailsCollapsed,
-        file: {
-          cacheKey: `${commitDetailsItemId}:${commitMetadata.ref}`,
-          contents: ' ',
-          lang: 'text',
-          name: commitDetailsFileName,
-        },
-        id: commitDetailsItemId,
-        type: 'file',
-        version: getItemVersion(
-          `${getCommitDetailsVersionKey(
-            commitMetadata,
-            commitDetailsLayoutPass,
-            navigationKey,
-          )}:${fontLayoutKey}:${commitDetailsCollapsed ? 'collapsed' : 'open'}`,
-        ),
-      });
-    }
-
     return {
-      commitDetailsFiles: nextCommitDetailsFiles,
       firstItemByBlockId: nextFirstItemByBlockId,
       firstItemByPath: nextFirstItemByPath,
       itemBlockId: nextItemBlockId,
@@ -2930,10 +2863,6 @@ export function ReviewCodeView({
   }, [
     collapsed,
     canEditSourceDescription,
-    commitDetailsItemId,
-    commitDetailsCollapsed,
-    commitDetailsLayoutPass,
-    commitMetadata,
     commentLayoutPassByItem,
     commentsBySection,
     diffLineHeight,
@@ -2953,14 +2882,16 @@ export function ReviewCodeView({
     selectedPath,
     showWhitespace,
     sourceAuthor,
+    sourceDescriptionAriaLabel,
     sourceDescription,
     sourceDescriptionCollapsed,
     sourceDescriptionFooter,
     sourceDescriptionFooterKey,
-    sourceDescriptionHasBody,
+    sourceDescriptionHasContent,
     sourceDescriptionItemId,
     sourceDescriptionLayoutPass,
     sourceTitle,
+    shouldShowCommitMessage,
     source.type,
     viewed,
     reviewIdentityByPath,
@@ -3132,10 +3063,6 @@ export function ReviewCodeView({
           const metadata = itemMetadata.get(context.item.id);
           const isWalkthroughHeaderItem = context.item.id.endsWith(':walkthrough-header');
           node.classList.toggle(
-            'codiff-commit-details-item',
-            context.item.id === commitDetailsItemId,
-          );
-          node.classList.toggle(
             'codiff-source-description-item',
             context.item.id === sourceDescriptionItemId,
           );
@@ -3173,7 +3100,6 @@ export function ReviewCodeView({
     [
       bottomInset,
       cancelPendingEmptyCommentDeletes,
-      commitDetailsItemId,
       createCommentForRange,
       diffStyle,
       isReadOnly,
@@ -3327,13 +3253,6 @@ export function ReviewCodeView({
     [],
   );
 
-  const scrollToCommitDetailsDestination = useCallback(
-    (itemId: string) => {
-      requestScrollItemHeaderIntoView(itemId, 'smooth');
-    },
-    [requestScrollItemHeaderIntoView],
-  );
-
   useLayoutEffect(() => {
     if (!scrollTarget || handledScrollRequestRef.current === scrollTarget.request) {
       return;
@@ -3421,7 +3340,7 @@ export function ReviewCodeView({
     };
 
     for (const item of items) {
-      if (item.id === commitDetailsItemId || item.id === sourceDescriptionItemId) {
+      if (item.id === sourceDescriptionItemId) {
         continue;
       }
 
@@ -3556,7 +3475,6 @@ export function ReviewCodeView({
     handle.scrollTo(target.scrollTarget);
   }, [
     clearCommentLineHighlight,
-    commitDetailsItemId,
     diffLineHeight,
     diffStyle,
     hunkNavigation,
@@ -3693,21 +3611,6 @@ export function ReviewCodeView({
 
   const renderCustomHeader = useCallback(
     (item: CodeViewItem<ReviewAnnotationMetadata>) => {
-      if (item.id === commitDetailsItemId) {
-        return commitMetadata ? (
-          <CommitDetailsHeader
-            isCollapsed={commitDetailsCollapsed}
-            metadata={commitMetadata}
-            onToggleCollapsed={() =>
-              setCommitDetailsCollapseState((current) => ({
-                collapsed: current.itemId === commitDetailsItemId ? !current.collapsed : true,
-                itemId: commitDetailsItemId,
-              }))
-            }
-          />
-        ) : null;
-      }
-
       if (item.id === sourceDescriptionItemId) {
         return (
           <SourceDescriptionHeader
@@ -3739,9 +3642,6 @@ export function ReviewCodeView({
       ) : null;
     },
     [
-      commitDetailsItemId,
-      commitDetailsCollapsed,
-      commitMetadata,
       allowViewedToggle,
       canEditSourceDescription,
       canEditSourceTitle,
@@ -3798,18 +3698,6 @@ export function ReviewCodeView({
         );
       }
 
-      if (annotation.metadata.type === 'commit-details') {
-        return (
-          <CommitDetailsPanel
-            files={commitDetailsFiles}
-            layoutKey={getCommitDetailsContentKey(annotation.metadata.metadata)}
-            metadata={annotation.metadata.metadata}
-            onLayoutReady={markCommitDetailsLayoutReady}
-            onSelectFileDestination={scrollToCommitDetailsDestination}
-          />
-        );
-      }
-
       if (annotation.metadata.type === 'walkthrough-header') {
         return annotation.metadata.header;
       }
@@ -3842,7 +3730,6 @@ export function ReviewCodeView({
       agentId,
       agentLabel,
       blurComment,
-      commitDetailsFiles,
       deleteComment,
       focusCommentId,
       focusCommentRequest,
@@ -3851,7 +3738,6 @@ export function ReviewCodeView({
       isPullRequest,
       itemMetadata,
       keymap,
-      markCommitDetailsLayoutReady,
       markMarkdownPreviewLayoutReady,
       markImagePreviewLayoutReady,
       markCommentLayoutChanged,
@@ -3863,7 +3749,6 @@ export function ReviewCodeView({
       onUpdateComment,
       renderComments,
       replyToThread,
-      scrollToCommitDetailsDestination,
       setMarkdownEditorRef,
       source,
     ],

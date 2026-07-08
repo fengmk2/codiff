@@ -14,7 +14,7 @@
     "./styles.css": "./App.css"
   },
   "dependencies": {
-    "@nkzw/mdx-editor": "^0.2.0",
+    "@nkzw/mdx-editor": "^0.2.1",
     "@nkzw/use-relative-time": "^1.2.3",
     "@phosphor-icons/react": "^2.1.10",
     "@pierre/diffs": "1.2.12",

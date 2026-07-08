@@ -88,6 +88,53 @@ const repositoryState = {
   source: { type: 'working-tree' },
 } satisfies RepositoryState;
 
+const createCommitMetadataFixture = (body: string): CommitMetadata => ({
+  author: {
+    date: '2026-01-01T12:00:00Z',
+    email: 'author@example.com',
+    gravatarUrl: 'https://www.gravatar.com/avatar/fallback',
+    name: 'Author',
+  },
+  body,
+  committer: {
+    date: '2026-01-01T13:00:00Z',
+    email: 'committer@example.com',
+    name: 'Committer',
+  },
+  files: [
+    {
+      additions: 1,
+      binary: false,
+      deletions: 1,
+      path: 'src/app.ts',
+      status: 'modified',
+    },
+  ],
+  parents: ['parent-sha'],
+  ref: 'abc1234',
+  refs: ['main'],
+  shortRef: 'abc1234',
+  signature: {
+    key: 'SHA256:abcdefghijklmnopqrstuvwxyz0123456789',
+    signer: 'signer@example.test',
+    status: 'G',
+  },
+  stats: {
+    additions: 1,
+    binaryFiles: 0,
+    deletions: 1,
+    files: 1,
+    renamedFiles: 0,
+  },
+  subject: 'Commit subject',
+  trailers: [
+    {
+      key: 'Co-authored-by',
+      value: 'Second Author <second@example.com>',
+    },
+  ],
+});
+
 const createCodiffMock = (overrides: Partial<Window['codiff']> = {}): Window['codiff'] => ({
   askReviewAssistant: vi.fn(async () => ({
     reason: 'Unavailable in tests.',
@@ -1059,69 +1106,32 @@ test('Mod+K does not open deleted files', async () => {
   }
 });
 
-test('commit details render inline in the diff view', async () => {
+test('commit messages use the shared source description presentation', async () => {
   const changedFile = createChangedFile('src/app.ts');
   const source = { ref: 'abc1234', type: 'commit' } satisfies ReviewSource;
-  const writeClipboardText = vi.fn(async () => undefined);
-  const commitMetadata = {
-    author: {
-      date: '2026-01-01T12:00:00Z',
-      email: 'author@example.com',
-      name: 'Author',
-    },
-    body: 'Detailed commit body.',
-    committer: {
-      date: '2026-01-01T13:00:00Z',
-      email: 'committer@example.com',
-      name: 'Committer',
-    },
-    files: [
-      {
-        additions: 1,
-        binary: false,
-        deletions: 1,
-        path: 'src/app.ts',
-        status: 'modified' as const,
-      },
-    ],
-    parents: ['parent-sha'],
-    ref: 'abc1234',
-    refs: ['main'],
-    shortRef: 'abc1234',
-    signature: {
-      key: 'SHA256:abcdefghijklmnopqrstuvwxyz0123456789',
-      signer: 'signer@example.test',
-      status: 'G',
-    },
-    stats: {
-      additions: 1,
-      binaryFiles: 0,
-      deletions: 1,
-      files: 1,
-      renamedFiles: 0,
-    },
-    subject: 'Commit subject',
-    trailers: [
-      {
-        key: 'Co-authored-by',
-        value: 'Second Author <second@example.com>',
-      },
-    ],
-  } satisfies CommitMetadata;
+  const commitMetadata = createCommitMetadataFixture('## Details\n\nDetailed **commit** body.');
+  const historyAvatarUrl = 'https://avatars.githubusercontent.com/u/1?v=4';
 
   window.codiff = createCodiffMock({
+    getRepositoryHistory: vi.fn(async () => ({
+      entries: [
+        {
+          author: commitMetadata.author.name,
+          committedAt: Date.parse(commitMetadata.author.date),
+          gravatarUrl: historyAvatarUrl,
+          parents: commitMetadata.parents,
+          ref: commitMetadata.ref,
+          subject: commitMetadata.subject,
+        },
+      ],
+      root: '/repo',
+    })),
     getRepositoryState: vi.fn(async () => ({
       ...repositoryState,
       commitMetadata,
       files: [changedFile],
       source,
     })),
-  });
-  Object.defineProperty(navigator, 'clipboard', {
-    configurable: true,
-    value: {
-      writeText: writeClipboardText,
-    },
   });
 
   const container = document.createElement('div');
@@ -1136,53 +1146,77 @@ test('commit details render inline in the diff view', async () => {
 
     await waitFor(() => {
       expect(container.querySelector('.loading')).toBeNull();
-      expect(container.querySelector('.commit-details-panel')).not.toBeNull();
+      expect(container.querySelector('.codiff-source-description-header')).not.toBeNull();
     });
 
     await waitFor(() => {
-      expect(container.querySelector('.commit-details-panel')?.textContent).toContain(
+      expect(container.querySelector('.source-description-markdown')?.textContent).toContain(
         'Detailed commit body.',
       );
-      expect(container.querySelector('.commit-details-panel')?.textContent).toContain(
-        'Co-authored-by',
-      );
     });
 
-    const signature = container.querySelector<HTMLElement>('.commit-details-signature');
-    if (!signature) {
-      throw new Error('Expected commit signature.');
-    }
-    expect(signature.textContent).toBe(
-      'Verified signature by signer@example.test (SHA256:abcd...6789)',
+    const header = container.querySelector<HTMLElement>('.codiff-source-description-header');
+    expect(header?.querySelector('.source-description-title')?.textContent).toBe(
+      commitMetadata.subject,
     );
-    expect(signature.textContent).not.toContain(commitMetadata.signature.key);
-    expect(signature.getAttribute('title')).toBe(commitMetadata.signature.key);
-
-    const fileLineCount = container.querySelector<HTMLElement>('.commit-details-file-line-count');
-    if (!fileLineCount) {
-      throw new Error('Expected commit details file line count.');
-    }
-    expect(fileLineCount.querySelector('.codiff-line-count-added')?.textContent).toBe('+1');
-    expect(fileLineCount.querySelector('.codiff-line-count-deleted')?.textContent).toBe('-1');
-
-    const copyButton = container.querySelector<HTMLButtonElement>('.commit-details-copy');
-    if (!copyButton) {
-      throw new Error('Expected commit details copy button.');
-    }
-
-    await act(async () => {
-      copyButton.click();
-    });
-
-    expect(writeClipboardText).toHaveBeenCalledWith(commitMetadata.ref);
-    expect(copyButton.getAttribute('aria-label')).toBe('Commit hash copied');
-    expect(copyButton.textContent).toContain(commitMetadata.shortRef);
-    expect(copyButton.textContent).not.toContain('Copied');
+    expect(container.querySelector('.source-description-author-header')?.textContent).toContain(
+      commitMetadata.author.name,
+    );
+    expect(
+      container.querySelector<HTMLImageElement>('.source-description-comment > .gravatar.medium')
+        ?.src,
+    ).toBe(historyAvatarUrl);
+    expect(container.querySelector('[aria-label="Preview commit message"]')).not.toBeNull();
+    expect(container.querySelector('.codiff-commit-details-header')).toBeNull();
+    expect(container.querySelector('.commit-details-panel')).toBeNull();
+    expect(container.textContent).not.toContain('Verified signature');
+    expect(container.textContent).not.toContain('Co-authored-by');
   } finally {
     if (root) {
       await act(async () => root?.unmount());
     }
     container.remove();
+  }
+});
+
+test('bodyless commits still render the author and profile image', async () => {
+  const commitMetadata = createCommitMetadataFixture('');
+  const source = { ref: commitMetadata.ref, type: 'commit' } satisfies ReviewSource;
+
+  window.codiff = createCodiffMock({
+    getRepositoryState: vi.fn(async () => ({
+      ...repositoryState,
+      commitMetadata,
+      files: [createChangedFile('src/app.ts')],
+      source,
+    })),
+  });
+
+  const app = await renderReact(<App />);
+
+  try {
+    await waitFor(() => {
+      expect(
+        app.container.querySelector('.source-description-author-header')?.textContent,
+      ).toContain(commitMetadata.author.name);
+    });
+
+    expect(
+      app.container.querySelector<HTMLImageElement>(
+        '.source-description-comment > .gravatar.medium',
+      )?.src,
+    ).toBe(commitMetadata.author.gravatarUrl);
+    expect(
+      app.container.querySelector('.source-description-author-header.without-description'),
+    ).not.toBeNull();
+    expect(app.container.querySelector('.source-description-markdown')).toBeNull();
+    expect(
+      app.container
+        .querySelector('.codiff-source-description-header')
+        ?.querySelector('.source-description-title')?.textContent,
+    ).toBe(commitMetadata.subject);
+  } finally {
+    await app.cleanup();
   }
 });
 
@@ -1602,8 +1636,8 @@ test('narrative walkthrough stops do not repeat commit details', async () => {
       expect(container.querySelector('.wt-stop-block')).not.toBeNull();
     });
 
-    expect(container.querySelector('.codiff-commit-details-header')).toBeNull();
-    expect(container.querySelector('.commit-details-panel')).toBeNull();
+    expect(container.querySelector('.codiff-source-description-header')).toBeNull();
+    expect(container.querySelector('.source-description-markdown')).toBeNull();
     expect(container.querySelector('.wt-stage-title')?.textContent).toContain(
       'Implementation path',
     );

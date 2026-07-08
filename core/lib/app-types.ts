@@ -2,7 +2,6 @@ import type { CodeViewHandle } from '@pierre/diffs/react';
 import type { ReactNode } from 'react';
 import type {
   ChangedFile,
-  CommitMetadata,
   DiffSection,
   NarrativeWalkthrough,
   NarrativeWalkthroughResult,
@@ -33,18 +32,12 @@ type ImagePreviewAnnotationMetadata = {
   type: 'image-preview';
 };
 
-type CommitDetailsAnnotationMetadata = {
-  metadata: CommitMetadata;
-  type: 'commit-details';
-};
-
 type WalkthroughHeaderAnnotationMetadata = {
   header: ReactNode;
   type: 'walkthrough-header';
 };
 
 export type ReviewAnnotationMetadata =
-  | CommitDetailsAnnotationMetadata
   | ImagePreviewAnnotationMetadata
   | MarkdownPreviewAnnotationMetadata
   | ReviewCommentAnnotationMetadata

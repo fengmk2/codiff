@@ -195,43 +195,31 @@ export const codeViewUnsafeCSS = `
     display: none;
   }
 
-  /* Commit details and PR/MR descriptions render through CodeView's file layout with no real code. */
-  :host(:is(.codiff-commit-details-item, .codiff-source-description-item)) {
+  /* Review descriptions render through CodeView's file layout with no real code. */
+  :host(.codiff-source-description-item) {
     --diffs-scrollbar-gutter-override: 0px;
   }
 
-  :host(.codiff-commit-details-item) {
-    background: transparent;
-    border: 0;
-    box-shadow: none;
-  }
-
-  :host(.codiff-commit-details-item) [data-file] {
-    background: transparent;
-    border: 0;
-    box-shadow: none;
-  }
-
-  :host(:is(.codiff-commit-details-item, .codiff-source-description-item)) [data-file] [data-code] {
+  :host(.codiff-source-description-item) [data-file] [data-code] {
     overflow: visible;
     padding-bottom: 0;
     padding-top: 0;
     scrollbar-width: none;
   }
 
-  :host(:is(.codiff-commit-details-item, .codiff-source-description-item)) [data-file] [data-code]::-webkit-scrollbar {
+  :host(.codiff-source-description-item) [data-file] [data-code]::-webkit-scrollbar {
     display: none;
   }
 
-  :host(:is(.codiff-commit-details-item, .codiff-source-description-item)) [data-file] :is([data-line], [data-column-number], [data-gutter-buffer], [data-gutter-gap]) {
+  :host(.codiff-source-description-item) [data-file] :is([data-line], [data-column-number], [data-gutter-buffer], [data-gutter-gap]) {
     display: none;
   }
 
-  :host(:is(.codiff-commit-details-item, .codiff-source-description-item)) [data-file] :is([data-code], [data-content]) {
+  :host(.codiff-source-description-item) [data-file] :is([data-code], [data-content]) {
     display: block;
   }
 
-  :host(:is(.codiff-commit-details-item, .codiff-source-description-item)) [data-file] [data-line-annotation] {
+  :host(.codiff-source-description-item) [data-file] [data-line-annotation] {
     background: transparent;
     grid-column: 1 / -1;
   }
