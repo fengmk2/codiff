@@ -20,8 +20,8 @@ blockExoticSubdeps: false
 minimumReleaseAgeExclude:
   - '@nkzw/*'
 catalog:
-  vite: npm:@voidzero-dev/vite-plus-core@^0.3.0
-  vite-plus: ^0.3.0
+  vite: npm:@voidzero-dev/vite-plus-core@0.3.0
+  vite-plus: 0.3.0
   vitest: 4.1.11
 nodeLinker: hoisted
 onlyBuiltDependencies:
@@ -33,8 +33,8 @@ onlyBuiltDependencies:
 overrides:
   better-auth: 1.7.1
   extract-zip>yauzl: ^3.4.0
-  vite: 'catalog:'
-  vitest: 'catalog:'
+  vite@*: 'catalog:'
+  vitest@*: 'catalog:'
 patchedDependencies:
   native-keymap@3.3.9: patches/native-keymap@3.3.9.patch
 peerDependencyRules:
