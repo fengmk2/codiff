@@ -8,7 +8,7 @@ import type { ChangedFile, ReviewSource } from '../../types.ts';
 export type { ReviewDiffBlock } from '../../app/components/ReviewCodeView.tsx';
 
 const codeViewMockState = vi.hoisted(() => ({
-  lastItems: [] as ReadonlyArray<{ id: string; type: string; version?: unknown }>,
+  lastItems: [] as ReadonlyArray<CodeViewItem<unknown>>,
   lastOptions: null as Record<string, unknown> | null,
   postRenderNodes: [] as Array<HTMLElement>,
   renderCount: 0,

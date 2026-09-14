@@ -120,6 +120,7 @@ import type {
   ReviewAuthor,
   ReviewSource,
 } from '../../types.ts';
+import { useCodeViewPlaceholderFile } from '../hooks/useCodeViewPlaceholderFile.ts';
 import { Avatar } from './Avatar.tsx';
 import { Button } from './Button.tsx';
 import { DefinitionPopover } from './DefinitionPopover.tsx';
@@ -2616,6 +2617,7 @@ export function ReviewCodeView({
   wordWrap: boolean;
 }) {
   const codeViewRef = useRef<CodeViewHandle<ReviewAnnotationMetadata, undefined>>(null);
+  const getPlaceholderFile = useCodeViewPlaceholderFile();
   const markdownEditorRefs = useRef(new Map<string, MarkdownDocumentEditorHandle>());
   const refreshingMarkdownSectionsRef = useRef(new Set<string>());
   const deferredTimersRef = useRef<Set<number>>(new Set());
@@ -2812,12 +2814,7 @@ export function ReviewCodeView({
             } satisfies LineAnnotation<ReviewAnnotationMetadata>,
           ],
           collapsed: false,
-          file: {
-            cacheKey: `walkthrough-header:${block.id}`,
-            contents: ' ',
-            lang: 'text',
-            name: headerId,
-          },
+          file: getPlaceholderFile(headerId),
           id: headerId,
           type: 'file',
           // Selection stays out of the version: a scroll-driven current-stop
@@ -2974,12 +2971,7 @@ export function ReviewCodeView({
               } satisfies LineAnnotation<ReviewAnnotationMetadata>,
             ],
             collapsed: isCollapsed,
-            file: {
-              cacheKey: `image-preview:${file.fingerprint}:${section.id}`,
-              contents: ' ',
-              lang: 'text',
-              name: file.path,
-            },
+            file: getPlaceholderFile(file.path),
             id,
             type: 'file',
             version: getItemVersion(
@@ -3010,14 +3002,7 @@ export function ReviewCodeView({
               } satisfies LineAnnotation<ReviewAnnotationMetadata>,
             ],
             collapsed: isCollapsed,
-            file: {
-              cacheKey: `markdown-preview:${section.newFile?.cacheKey ?? file.fingerprint}:${
-                markdownPreview.contents.length
-              }:${markdownPreviewAddedLinesDigest}`,
-              contents: ' ',
-              lang: 'text',
-              name: file.path,
-            },
+            file: getPlaceholderFile(file.path),
             id,
             type: 'file',
             version: getItemVersion(
@@ -3068,6 +3053,7 @@ export function ReviewCodeView({
     diffStyle,
     expandedReviewKeys,
     forceExpandedPaths,
+    getPlaceholderFile,
     imagePreviewLayoutPassBySection,
     isReadOnly,
     itemVersionByKey,
@@ -3091,17 +3077,15 @@ export function ReviewCodeView({
     return [
       {
         collapsed: true,
-        file: {
-          cacheKey: sourceDescriptionItemId,
-          contents: '',
-          lang: 'text',
-          name: shouldShowCommitMessage ? 'commit-message.md' : 'source-description.md',
-        },
+        file: getPlaceholderFile(
+          shouldShowCommitMessage ? 'commit-message.md' : 'source-description.md',
+          '',
+        ),
         id: sourceDescriptionItemId,
         type: 'file',
       },
     ];
-  }, [items, shouldShowCommitMessage, sourceDescriptionItemId]);
+  }, [getPlaceholderFile, items, shouldShowCommitMessage, sourceDescriptionItemId]);
 
   const clearCommentLineHighlight = useCallback(() => {
     codeViewRef.current?.clearSelectedLines();

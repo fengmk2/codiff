@@ -2,6 +2,7 @@
  * @vitest-environment jsdom
  */
 
+import { CodeView, preloadHighlighter } from '@pierre/diffs';
 import { act, useCallback, useState } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { beforeEach, expect, test, vi } from 'vite-plus/test';
@@ -1280,6 +1281,50 @@ test('hunk navigation skips pull request description source context', async () =
       type: 'line',
     }),
   );
+});
+
+test('markdown preview files survive layout updates in the real virtualized renderer', async () => {
+  await preloadHighlighter({ langs: ['text'], themes: ['github-dark'] });
+  const file = createLoadedMarkdownFile('# Readme\n', 'markdown-layout');
+  await using app = await renderReact(<ReviewCodeViewHarness files={[file]} />);
+  const root = document.createElement('div');
+  root.className = 'code-view';
+  document.body.append(root);
+  const viewer = new CodeView<unknown>({
+    disableErrorHandling: true,
+    theme: 'github-dark',
+    themeType: 'dark',
+  });
+  try {
+    viewer.setup(root);
+    viewer.setItems(codeViewMock.lastItems);
+    viewer.render(true);
+    expect(viewer.getRenderedItems()).toHaveLength(1);
+    await app.rerender(<ReviewCodeViewHarness collapsed={new Set([file.path])} files={[file]} />);
+    expect(codeViewMock.lastItems[0]?.collapsed).toBe(true);
+    viewer.setItems(codeViewMock.lastItems);
+    expect(() => viewer.render(true)).not.toThrow();
+    expect(viewer.getRenderedItems()).toHaveLength(1);
+    await app.rerender(<ReviewCodeViewHarness files={[file]} />);
+    viewer.setItems(codeViewMock.lastItems);
+    expect(() => viewer.render(true)).not.toThrow();
+
+    const updatedFile = createLoadedMarkdownFile('# Updated readme\n', 'markdown-updated');
+    await app.rerender(<ReviewCodeViewHarness files={[updatedFile]} />);
+    expect(codeViewMock.lastItems[0]?.annotations).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          metadata: expect.objectContaining({ contents: '# Updated readme\n' }),
+        }),
+      ]),
+    );
+    viewer.setItems(codeViewMock.lastItems);
+    expect(() => viewer.render(true)).not.toThrow();
+    expect(viewer.getRenderedItems()).toHaveLength(1);
+  } finally {
+    viewer.cleanUp();
+    root.remove();
+  }
 });
 
 test('read-only markdown previews trigger CodeView layout remeasurement after height change', async () => {
