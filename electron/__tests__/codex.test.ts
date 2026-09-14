@@ -90,6 +90,7 @@ test('normalizes OpenAI model preferences to known models', () => {
   expect(normalizeOpenAIModel('gpt-5.6-terra')).toBe('gpt-5.6-terra');
   expect(normalizeOpenAIModel('gpt-5.6-luna')).toBe('gpt-5.6-luna');
   expect(normalizeOpenAIModel('gpt-5.5')).toBe('gpt-5.5');
+  expect(normalizeOpenAIModel('gpt-5.3-codex-spark')).toBe(DEFAULT_OPENAI_MODEL);
   expect(normalizeOpenAIModel('gpt-5.4-mini')).toBe(DEFAULT_OPENAI_MODEL);
   expect(normalizeOpenAIModel('gpt-5.3-codex')).toBe(DEFAULT_OPENAI_MODEL);
   expect(normalizeOpenAIModel('gpt-4o')).toBe(DEFAULT_OPENAI_MODEL);

@@ -18,7 +18,6 @@ const {
 const CODEX_TIMEOUT_MS = 90_000;
 const DEFAULT_OPENAI_MODEL = 'gpt-5.6-terra';
 const FALLBACK_OPENAI_MODEL = 'gpt-5.5';
-const LEGACY_OPENAI_MODEL = 'gpt-5.3-codex-spark';
 const CODEX_REASONING_EFFORT = 'low';
 const CODEX_MACOS_BLOCKED_MESSAGE =
   'macOS blocked the local Codex CLI. Update Codex CLI from the official OpenAI release, then run `codex --version` and try again.';
@@ -70,10 +69,6 @@ const OPENAI_MODELS = Object.freeze([
   {
     id: FALLBACK_OPENAI_MODEL,
     label: 'Compatibility: GPT-5.5',
-  },
-  {
-    id: LEGACY_OPENAI_MODEL,
-    label: 'Preview: GPT-5.3 Codex Spark',
   },
 ]);
 const OPENAI_MODEL_IDS = new Set(OPENAI_MODELS.map((model) => model.id));
