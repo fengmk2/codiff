@@ -1,7 +1,7 @@
-/// <reference types="@cloudflare/vitest-pool-workers/types" />
+/// <reference types="@cloudflare/vitest-plugin/types" />
 
 import { env, SELF } from 'cloudflare:test';
-import { afterEach, beforeEach, expect, test, vi } from 'vite-plus/test';
+import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import { handleSharingApiRequest, type SharingBucket, type SharingEnv } from '../service/api.ts';
 import { hashUploadIntentSecret } from '../service/upload-intent.ts';
 

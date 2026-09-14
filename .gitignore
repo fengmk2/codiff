@@ -1,6 +1,7 @@
 .enum_manifest.json
 .fate/
 .void/
+.vitest/
 .wrangler/
 **/.fate/
 **/.void/

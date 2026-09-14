@@ -46,7 +46,7 @@
     "prepack": "vp build",
     "prepare": "vp config",
     "test": "vp test",
-    "test:integration": "vp run build && vp test -c vitest.cloudflare.config.ts"
+    "test:integration": "vp run build && vp run --filter '@nkzw/codiff-integration-tests' test"
   },
   "dependencies": {
     "electron-squirrel-startup": "^1.0.1",
@@ -55,7 +55,6 @@
     "proper-lockfile": "^4.1.2"
   },
   "devDependencies": {
-    "@cloudflare/vitest-pool-workers": "^0.22.0",
     "@electron-forge/cli": "^7.11.2",
     "@electron-forge/maker-deb": "^7.11.2",
     "@electron-forge/maker-rpm": "^7.11.2",
@@ -63,17 +62,17 @@
     "@electron-forge/maker-zip": "^7.11.2",
     "@nkzw/eslint-plugin": "^2.0.0",
     "@nkzw/oxlint-config": "^2.0.1",
-    "@rolldown/plugin-babel": "^0.2.3",
-    "@types/node": "^26.4.1",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.5",
+    "@rolldown/plugin-babel": "^0.2.4",
+    "@types/node": "^26.5.1",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "babel-plugin-react-compiler": "^1.0.0",
-    "electron": "^44.1.1",
+    "electron": "^44.3.0",
     "ghostty-web": "^0.4.0",
     "jsdom": "^30.0.1",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:",

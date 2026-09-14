@@ -1,0 +1,12 @@
+{
+  "name": "@nkzw/codiff-integration-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-plugin": "^1.1.8",
+    "vitest": "4.1.11"
+  }
+}

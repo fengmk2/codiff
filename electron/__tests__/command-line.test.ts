@@ -96,7 +96,7 @@ test('parses the OpenCode agent override', () => {
   });
 });
 
-test.sequential('plan command lines do not inspect Git refs', async () => {
+test('plan command lines do not inspect Git refs', { concurrent: false }, async () => {
   await using directory = await createTemporaryDirectory('codiff-plan-command-line-');
   const fakeBin = join(directory.path, 'bin');
   const gitMarker = join(directory.path, 'git-invoked');

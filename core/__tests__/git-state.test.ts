@@ -1184,22 +1184,26 @@ test('readWalkthroughRepositoryState preserves nested launch paths', () =>
     expect(dirtyState.root).toBe(repo);
   }));
 
-test.sequential('clean implicit walkthrough reads use a bounded number of Git processes', () =>
-  withRepo(async (repo) => {
-    await writeRepoFile(repo, 'example.txt', 'before\n');
-    await commitAll(repo, 'initial commit');
+test(
+  'clean implicit walkthrough reads use a bounded number of Git processes',
+  { concurrent: false },
+  () =>
+    withRepo(async (repo) => {
+      await writeRepoFile(repo, 'example.txt', 'before\n');
+      await commitAll(repo, 'initial commit');
 
-    const tracePath = join(repo, '.git', 'walkthrough-trace.jsonl');
-    await using _environment = createTemporaryEnvironment({ GIT_TRACE2_EVENT: tracePath });
-    await readWalkthroughRepositoryState(repo);
-    const processCount = readFileSync(tracePath, 'utf8')
-      .trim()
-      .split('\n')
-      .filter(Boolean)
-      .map((line) => JSON.parse(line) as { event?: string })
-      .filter(({ event }) => event === 'version').length;
-    expect(processCount).toBeLessThanOrEqual(14);
-  }));
+      const tracePath = join(repo, '.git', 'walkthrough-trace.jsonl');
+      await using _environment = createTemporaryEnvironment({ GIT_TRACE2_EVENT: tracePath });
+      await readWalkthroughRepositoryState(repo);
+      const processCount = readFileSync(tracePath, 'utf8')
+        .trim()
+        .split('\n')
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as { event?: string })
+        .filter(({ event }) => event === 'version').length;
+      expect(processCount).toBeLessThanOrEqual(14);
+    }),
+);
 
 test('readRepositoryState reports commit metadata for root commits', async () => {
   await withRepo(async (repo) => {

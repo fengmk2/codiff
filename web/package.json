@@ -13,28 +13,28 @@
     "fate:generate": "node ../node_modules/react-fate/lib/cli.mjs generate"
   },
   "dependencies": {
-    "@base-ui/react": "^1.7.0",
+    "@base-ui/react": "^1.8.0",
     "@nkzw/codiff-core": "workspace:*",
     "@nkzw/codiff-service": "workspace:*",
     "@phosphor-icons/react": "^2.1.10",
     "@void/react": "0.10.13",
-    "better-auth": "1.7.2",
-    "cf-fate": "^1.3.3",
-    "react": "^19.2.8",
-    "react-dom": "^19.2.8",
-    "react-error-boundary": "^6.1.4",
-    "react-fate": "^1.3.3",
+    "better-auth": "1.7.4",
+    "cf-fate": "^1.5.1",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "react-error-boundary": "^6.1.5",
+    "react-fate": "^1.5.1",
     "void": "^0.10.13"
   },
   "devDependencies": {
-    "@rolldown/plugin-babel": "^0.2.3",
-    "@types/react": "^19.2.18",
-    "@types/react-dom": "^19.2.5",
+    "@rolldown/plugin-babel": "^0.2.4",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.1.1",
     "babel-plugin-react-compiler": "^1.0.0",
     "typescript": "^7.0.2",
     "vite": "catalog:",
     "vite-plus": "catalog:",
-    "wrangler": "^4.128.0"
+    "wrangler": "^4.131.1"
   }
 }

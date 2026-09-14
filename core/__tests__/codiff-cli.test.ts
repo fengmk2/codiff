@@ -225,32 +225,36 @@ test('parseArguments keeps existing hash-like paths as repository paths', async 
   });
 });
 
-test.sequential('parseArguments does not inspect Git refs for plan working directories', async () => {
-  await using directory = await createTemporaryDirectory('codiff-plan-arguments-');
-  const fakeBin = join(directory.path, 'bin');
-  const gitMarker = join(directory.path, 'git-invoked');
-  const planFile = join(directory.path, 'plan.md');
-  const workspace = join(directory.path, 'workspace');
+test(
+  'parseArguments does not inspect Git refs for plan working directories',
+  { concurrent: false },
+  async () => {
+    await using directory = await createTemporaryDirectory('codiff-plan-arguments-');
+    const fakeBin = join(directory.path, 'bin');
+    const gitMarker = join(directory.path, 'git-invoked');
+    const planFile = join(directory.path, 'plan.md');
+    const workspace = join(directory.path, 'workspace');
 
-  await mkdir(fakeBin);
-  await mkdir(workspace);
-  await writeFile(planFile, '# Plan\n');
-  await writeFile(join(fakeBin, 'git'), `#!/bin/sh\nprintf invoked > "${gitMarker}"\nexit 99\n`);
-  await chmod(join(fakeBin, 'git'), 0o755);
-  await using _environment = createTemporaryEnvironment({
-    PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
-  });
-  const realWorkspace = await realpath(workspace);
-
-  await withCwd(directory.path, () => {
-    expect(parseArguments(['--plan', planFile, 'workspace'])).toMatchObject({
-      commitRef: null,
-      planFilePath: planFile,
-      requestedPath: realWorkspace,
+    await mkdir(fakeBin);
+    await mkdir(workspace);
+    await writeFile(planFile, '# Plan\n');
+    await writeFile(join(fakeBin, 'git'), `#!/bin/sh\nprintf invoked > "${gitMarker}"\nexit 99\n`);
+    await chmod(join(fakeBin, 'git'), 0o755);
+    await using _environment = createTemporaryEnvironment({
+      PATH: `${fakeBin}:${process.env.PATH ?? ''}`,
     });
-  });
-  expect(await readFile(gitMarker, 'utf8').catch(() => null)).toBeNull();
-});
+    const realWorkspace = await realpath(workspace);
+
+    await withCwd(directory.path, () => {
+      expect(parseArguments(['--plan', planFile, 'workspace'])).toMatchObject({
+        commitRef: null,
+        planFilePath: planFile,
+        requestedPath: realWorkspace,
+      });
+    });
+    expect(await readFile(gitMarker, 'utf8').catch(() => null)).toBeNull();
+  },
+);
 
 test('parseArguments treats GitHub pull request URLs as review sources', () => {
   const pullRequestUrl = 'https://github.com/nkzw-tech/codiff/pull/3';
@@ -448,30 +452,34 @@ test('resolvePullRequestUrl builds GitLab MR URLs from an arbitrary GitLab remot
   );
 });
 
-test.sequential('PR branch lookup preserves the canonical GitHub URL returned by gh', async () => {
-  await withFakeGitHubCli(
-    {
-      state: 'OPEN',
-      url: 'https://github.com/nkzw-tech/codiff/pull/129',
-    },
-    async (argsPath) => {
-      expect(
-        resolvePullRequestTargetUrl({
-          branch: 'iminoso:feat/pr-branch-lookup',
-          number: null,
-          provider: 'github',
-          repositoryPath: process.cwd(),
-          url: null,
-        }),
-      ).toBe('https://github.com/nkzw-tech/codiff/pull/129');
-      expect(await readFile(argsPath, 'utf8')).toBe(
-        ['pr', 'view', 'iminoso:feat/pr-branch-lookup', '--json', 'state,url', ''].join('\n'),
-      );
-    },
-  );
-});
+test(
+  'PR branch lookup preserves the canonical GitHub URL returned by gh',
+  { concurrent: false },
+  async () => {
+    await withFakeGitHubCli(
+      {
+        state: 'OPEN',
+        url: 'https://github.com/nkzw-tech/codiff/pull/129',
+      },
+      async (argsPath) => {
+        expect(
+          resolvePullRequestTargetUrl({
+            branch: 'iminoso:feat/pr-branch-lookup',
+            number: null,
+            provider: 'github',
+            repositoryPath: process.cwd(),
+            url: null,
+          }),
+        ).toBe('https://github.com/nkzw-tech/codiff/pull/129');
+        expect(await readFile(argsPath, 'utf8')).toBe(
+          ['pr', 'view', 'iminoso:feat/pr-branch-lookup', '--json', 'state,url', ''].join('\n'),
+        );
+      },
+    );
+  },
+);
 
-test.sequential('PR branch lookup rejects merged pull requests', async () => {
+test('PR branch lookup rejects merged pull requests', { concurrent: false }, async () => {
   await withFakeGitHubCli(
     {
       state: 'MERGED',
