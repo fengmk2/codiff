@@ -12,6 +12,7 @@ const codeViewMockState = vi.hoisted(() => ({
   lastOptions: null as Record<string, unknown> | null,
   postRenderNodes: [] as Array<HTMLElement>,
   renderCount: 0,
+  renderedElements: new Map<string, HTMLElement>(),
   scrollTo: vi.fn(),
 }));
 export const codeViewMock = codeViewMockState;
@@ -20,6 +21,7 @@ export const resetCodeViewMock = () => {
   codeViewMock.lastItems = [];
   codeViewMock.lastOptions = null;
   codeViewMock.postRenderNodes = [];
+  codeViewMock.renderedElements.clear();
   codeViewMock.renderCount = 0;
   codeViewMock.scrollTo.mockClear();
 };
@@ -72,9 +74,13 @@ vi.mock('@pierre/diffs/react', async () => {
         () => ({
           getRenderedItems: () =>
             itemsRef.current
-              .filter((item) => renderedIdsRef.current.has(item.id))
+              .filter(
+                (item) =>
+                  renderedIdsRef.current.has(item.id) || codeViewMock.renderedElements.has(item.id),
+              )
               .map((item) => ({
-                element: document.createElement('div'),
+                element:
+                  codeViewMock.renderedElements.get(item.id) ?? document.createElement('div'),
                 id: item.id,
                 instance: {},
                 item,

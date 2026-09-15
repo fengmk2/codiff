@@ -4089,6 +4089,7 @@ export function ReviewCodeView({
       return;
     }
 
+    let pointerDown = false;
     const updateDefinitionModifierState = (active: boolean) => {
       if (definitionModifierActiveRef.current === active) {
         return;
@@ -4097,25 +4098,39 @@ export function ReviewCodeView({
       updateRenderedIdentifierNavigation(active);
     };
     const handleModifierChange = (event: KeyboardEvent) => {
-      updateDefinitionModifierState(isPrimaryModifier(event));
+      updateDefinitionModifierState(isPrimaryModifier(event) && !pointerDown);
     };
     const handleModifierPointer = (event: PointerEvent) => {
-      updateDefinitionModifierState(isPrimaryModifier(event));
+      pointerDown = (event.buttons & 1) !== 0;
+      updateDefinitionModifierState(isPrimaryModifier(event) && !pointerDown);
     };
-    const clearDefinitionModifierState = () => updateDefinitionModifierState(false);
+    const handleSelectionChange = () => {
+      // A selection can start or clear without the modifier changing.
+      updateRenderedIdentifierNavigation(definitionModifierActiveRef.current);
+    };
+    const clearDefinitionModifierState = () => {
+      pointerDown = false;
+      updateDefinitionModifierState(false);
+    };
 
     window.addEventListener('keydown', handleModifierChange);
     window.addEventListener('keyup', handleModifierChange);
     window.addEventListener('pointerdown', handleModifierPointer);
     window.addEventListener('pointermove', handleModifierPointer);
+    window.addEventListener('pointerup', handleModifierPointer);
+    window.addEventListener('pointercancel', clearDefinitionModifierState);
     window.addEventListener('blur', clearDefinitionModifierState);
+    document.addEventListener('selectionchange', handleSelectionChange);
     return () => {
       clearDefinitionModifierState();
       window.removeEventListener('keydown', handleModifierChange);
       window.removeEventListener('keyup', handleModifierChange);
       window.removeEventListener('pointerdown', handleModifierPointer);
       window.removeEventListener('pointermove', handleModifierPointer);
+      window.removeEventListener('pointerup', handleModifierPointer);
+      window.removeEventListener('pointercancel', clearDefinitionModifierState);
       window.removeEventListener('blur', clearDefinitionModifierState);
+      document.removeEventListener('selectionchange', handleSelectionChange);
     };
   }, [onFindDefinitions, updateRenderedIdentifierNavigation]);
 

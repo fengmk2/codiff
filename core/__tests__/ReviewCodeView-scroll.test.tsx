@@ -2654,6 +2654,140 @@ test('modifier navigation follows file hosts reused by CodeView virtualization',
   });
 });
 
+const renderIdentifierNavigationView = async () => {
+  const view = await renderReact(
+    <ReviewCodeViewHarness
+      files={[createChangedFile('src/main.ts')]}
+      onFindDefinitions={async ({ identifier }) => ({
+        candidates: [],
+        identifier,
+        status: 'ready',
+      })}
+    />,
+  );
+  const { item } = getReviewCodeViewHandlers();
+  const host = document.createElement('div');
+  const root = host.attachShadow({ mode: 'open' });
+  const line = document.createElement('div');
+  line.dataset.line = '1';
+  line.textContent = 'formatGreeting(name);';
+  root.append(line);
+  view.container.append(host);
+  codeViewMock.renderedElements.set(item.id, host);
+  const onPostRender = codeViewMock.lastOptions?.onPostRender as (
+    node: HTMLElement,
+    instance: unknown,
+    phase: 'update',
+    context: { item: typeof item },
+  ) => void;
+
+  return {
+    ...view,
+    flushHighlights: async () => {
+      await act(async () => {
+        await new Promise<void>((resolve) => window.requestAnimationFrame(() => resolve()));
+      });
+    },
+    host,
+    line,
+    postRender: () => onPostRender(host, {}, 'update', { item }),
+    root,
+  };
+};
+
+test.each(['MacIntel', 'Win32'])(
+  'modifier highlights preserve text selected before deferred updates and during copy on %s',
+  async (platform) => {
+    using _platform = vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue(platform);
+    await using view = await renderIdentifierNavigationView();
+    const isMac = platform === 'MacIntel';
+    const modifier = { ctrlKey: !isMac, metaKey: isMac };
+    const modifierKey = isMac ? 'Meta' : 'Control';
+    const text = view.line.firstChild!;
+    const range = document.createRange();
+    const collapsedRange = document.createRange();
+    using _selection = vi.spyOn(window, 'getSelection').mockReturnValue({
+      getComposedRanges: () => [range],
+      getRangeAt: () => collapsedRange,
+      isCollapsed: true,
+      rangeCount: 1,
+      toString: () => '',
+    } as unknown as Selection);
+
+    // Selection starts after keydown but before either scheduled highlight path.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: modifierKey, ...modifier }));
+    view.postRender();
+    range.setStart(text, 0);
+    range.setEnd(text, 14);
+    await view.flushHighlights();
+    expect(view.host.hasAttribute('data-codiff-definition-mode')).toBe(false);
+    expect(view.root.querySelector('[data-codiff-identifier]')).toBeNull();
+    expect(range.toString()).toBe('formatGreeting');
+    expect(text.isConnected).toBe(true);
+
+    for (const type of ['keydown', 'keyup']) {
+      const event = new KeyboardEvent(type, { cancelable: true, key: 'c', ...modifier });
+      window.dispatchEvent(event);
+      expect(event.defaultPrevented).toBe(false);
+    }
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: modifierKey }));
+    expect(range.toString()).toBe('formatGreeting');
+
+    // Pressing the modifier with an existing selection is also harmless.
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: modifierKey, ...modifier }));
+    await view.flushHighlights();
+    expect(view.host.hasAttribute('data-codiff-definition-mode')).toBe(false);
+    expect(range.toString()).toBe('formatGreeting');
+
+    // Clearing selection restores highlights without requiring another keypress.
+    range.collapse();
+    document.dispatchEvent(new Event('selectionchange'));
+    await view.flushHighlights();
+    expect(view.host.hasAttribute('data-codiff-definition-mode')).toBe(true);
+    const identifierText = view.root.querySelector('[data-codiff-identifier]')!.firstChild!;
+    range.selectNodeContents(identifierText);
+    document.dispatchEvent(new Event('selectionchange'));
+    await view.flushHighlights();
+    expect(view.host.hasAttribute('data-codiff-definition-mode')).toBe(false);
+    expect(range.toString()).toBe('formatGreeting');
+    window.dispatchEvent(new KeyboardEvent('keyup', { key: modifierKey }));
+    expect(range.toString()).toBe('formatGreeting');
+    expect(range.startContainer).toBe(identifierText);
+    expect(identifierText.isConnected).toBe(true);
+  },
+);
+
+test('pointer selection cancels pending modifier highlights and resumes after release', async () => {
+  using _platform = vi.spyOn(window.navigator, 'platform', 'get').mockReturnValue('MacIntel');
+  await using view = await renderIdentifierNavigationView();
+  const text = view.line.firstChild;
+
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Meta', metaKey: true }));
+  view.postRender();
+  window.dispatchEvent(new MouseEvent('pointerdown', { buttons: 1, metaKey: true }));
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Meta', metaKey: true }));
+  window.dispatchEvent(new MouseEvent('pointermove', { buttons: 1, metaKey: true }));
+  view.postRender();
+  await view.flushHighlights();
+  expect(view.host.hasAttribute('data-codiff-definition-mode')).toBe(false);
+  expect(view.root.querySelector('[data-codiff-identifier]')).toBeNull();
+  expect(view.line.firstChild).toBe(text);
+
+  window.dispatchEvent(new MouseEvent('pointerup', { buttons: 0, metaKey: true }));
+  await view.flushHighlights();
+  expect(view.host.hasAttribute('data-codiff-definition-mode')).toBe(true);
+  expect(view.root.querySelector('[data-codiff-identifier]')?.textContent).toBe('formatGreeting');
+
+  // Losing pointer capture or window focus must not leave dragging latched.
+  for (const resetEvent of ['pointercancel', 'blur']) {
+    window.dispatchEvent(new MouseEvent('pointerdown', { buttons: 1, metaKey: true }));
+    window.dispatchEvent(new Event(resetEvent));
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Meta', metaKey: true }));
+    await view.flushHighlights();
+    expect(view.host.hasAttribute('data-codiff-definition-mode')).toBe(true);
+  }
+});
+
 test('line content clicks only ignore text selected on the clicked line', async () => {
   const onCreateComment = vi.fn();
   const file = createChangedFileWithPatch(
