@@ -120,6 +120,7 @@ import type {
   ReviewAuthor,
   ReviewSource,
 } from '../../types.ts';
+import { useCodeViewAnnotations } from '../hooks/useCodeViewAnnotations.ts';
 import { useCodeViewPlaceholderFile } from '../hooks/useCodeViewPlaceholderFile.ts';
 import { Avatar } from './Avatar.tsx';
 import { Button } from './Button.tsx';
@@ -429,42 +430,83 @@ const formatBytes = (size: number) => {
 };
 
 function MarkdownPreview({
+  cacheKey,
   contents,
   editable,
-  layoutKey,
+  heightCache,
   onEditorRef,
   onLayoutReady,
   path,
   sectionId,
 }: {
+  cacheKey: string;
   contents: string;
   editable: boolean;
-  layoutKey: string;
+  heightCache: Map<string, number>;
   onEditorRef: (sectionId: string, editor: MarkdownDocumentEditorHandle | null) => void;
   onLayoutReady: (sectionId: string) => void;
   path: string;
   sectionId: string;
 }) {
-  useLayoutEffect(() => {
-    onLayoutReady(sectionId);
-  }, [layoutKey, onLayoutReady, sectionId]);
+  const contentRef = useRef<HTMLDivElement>(null);
+  const [ready, setReady] = useState(false);
+  const measure = useCallback(
+    (reportedHeight?: number) => {
+      const content = contentRef.current;
+      if (
+        !content?.isConnected ||
+        content.querySelector(
+          '.codiff-markdown-editor-message:not(.error), .codiff-readonly-markdown-loading',
+        )
+      ) {
+        return;
+      }
+      // Measure the unconstrained content, so edits and width changes can shrink
+      // the document as well as grow it. Child reports also cover lazy editors.
+      const height = content.getBoundingClientRect().height || reportedHeight;
+      if (height == null || height <= 0) {
+        return;
+      }
+      setReady(true);
+      if (heightCache.get(cacheKey) !== height) {
+        heightCache.set(cacheKey, height);
+        onLayoutReady(sectionId);
+      }
+    },
+    [cacheKey, heightCache, onLayoutReady, sectionId],
+  );
 
-  return editable ? (
-    <div className="codiff-markdown-preview editable">
-      <RepositoryMarkdownEditor
-        onHeightChange={() => onLayoutReady(sectionId)}
-        path={path}
-        ref={(editor) => onEditorRef(sectionId, editor)}
-      />
-    </div>
-  ) : (
-    <div className="codiff-markdown-preview">
-      <ReadOnlyMarkdown
-        ariaLabel={`Preview ${path}`}
-        className="codiff-markdown-preview-editor"
-        onHeightChange={() => onLayoutReady(sectionId)}
-        value={contents}
-      />
+  useLayoutEffect(() => {
+    const content = contentRef.current;
+    if (!content) {
+      return;
+    }
+    const observer = new ResizeObserver(() => measure());
+    observer.observe(content);
+    measure();
+    return () => observer.disconnect();
+  }, [measure]);
+
+  return (
+    // Keep the last document height while a recycled editor reloads. Measuring
+    // its small loading placeholder would move every following item upward.
+    <div style={{ minHeight: ready ? undefined : heightCache.get(cacheKey) }}>
+      <div className={`codiff-markdown-preview${editable ? ' editable' : ''}`} ref={contentRef}>
+        {editable ? (
+          <RepositoryMarkdownEditor
+            onHeightChange={measure}
+            path={path}
+            ref={(editor) => onEditorRef(sectionId, editor)}
+          />
+        ) : (
+          <ReadOnlyMarkdown
+            ariaLabel={`Preview ${path}`}
+            className="codiff-markdown-preview-editor"
+            onHeightChange={measure}
+            value={contents}
+          />
+        )}
+      </div>
     </div>
   );
 }
@@ -2618,6 +2660,8 @@ export function ReviewCodeView({
 }) {
   const codeViewRef = useRef<CodeViewHandle<ReviewAnnotationMetadata, undefined>>(null);
   const getPlaceholderFile = useCodeViewPlaceholderFile();
+  const getAnnotations = useCodeViewAnnotations();
+  const [markdownPreviewHeights] = useState(() => new Map<string, number>());
   const markdownEditorRefs = useRef(new Map<string, MarkdownDocumentEditorHandle>());
   const refreshingMarkdownSectionsRef = useRef(new Set<string>());
   const deferredTimersRef = useRef<Set<number>>(new Set());
@@ -2650,8 +2694,8 @@ export function ReviewCodeView({
   const [markdownPreviewSections, setMarkdownPreviewSections] = useState<ReadonlySet<string>>(
     () => new Set([...initialMarkdownPreviewSectionIds, ...initialEditableMarkdownSections]),
   );
-  // Markdown previews render inside a CodeView item. Change the item version once after the
-  // preview appears so CodeView measures the preview height instead of the placeholder height.
+  // Remeasure only after the preview's actual content height changes. Mounting
+  // a loading placeholder must not invalidate a recycled document's layout.
   const [markdownPreviewLayoutPassBySection, setMarkdownPreviewLayoutPassBySection] = useState<
     Readonly<Record<string, number>>
   >({});
@@ -2986,21 +3030,30 @@ export function ReviewCodeView({
           const markdownPreviewAddedLinesDigest = getAddedLinesDigest(markdownPreview.addedLines);
           const markdownPreviewLayoutKey = `${section.id}:${markdownPreview.contents.length}:${markdownPreviewAddedLinesDigest}`;
           nextItems.push({
-            annotations: [
-              ...fileCommentAnnotations,
-              {
-                lineNumber: 1,
-                metadata: {
-                  addedLines: markdownPreview.addedLines,
-                  contents: markdownPreview.contents,
-                  editable: canEditMarkdown,
-                  layoutKey: markdownPreviewLayoutKey,
-                  path: file.path,
-                  sectionId: section.id,
-                  type: 'markdown-preview',
-                },
-              } satisfies LineAnnotation<ReviewAnnotationMetadata>,
-            ],
+            annotations: getAnnotations(
+              id,
+              JSON.stringify([
+                markdownPreview.contents,
+                markdownPreviewAddedLinesDigest,
+                canEditMarkdown,
+                fileCommentAnnotations,
+              ]),
+              [
+                ...fileCommentAnnotations,
+                {
+                  lineNumber: 1,
+                  metadata: {
+                    addedLines: markdownPreview.addedLines,
+                    contents: markdownPreview.contents,
+                    editable: canEditMarkdown,
+                    layoutKey: markdownPreviewLayoutKey,
+                    path: file.path,
+                    sectionId: section.id,
+                    type: 'markdown-preview',
+                  },
+                } satisfies LineAnnotation<ReviewAnnotationMetadata>,
+              ],
+            ),
             collapsed: isCollapsed,
             file: getPlaceholderFile(file.path),
             id,
@@ -3053,6 +3106,7 @@ export function ReviewCodeView({
     diffStyle,
     expandedReviewKeys,
     forceExpandedPaths,
+    getAnnotations,
     getPlaceholderFile,
     imagePreviewLayoutPassBySection,
     isReadOnly,
@@ -4282,9 +4336,10 @@ export function ReviewCodeView({
       if (annotation.metadata.type === 'markdown-preview') {
         return (
           <MarkdownPreview
+            cacheKey={`${sourceKey}:${item.id}`}
             contents={annotation.metadata.contents}
             editable={annotation.metadata.editable}
-            layoutKey={annotation.metadata.layoutKey}
+            heightCache={markdownPreviewHeights}
             onEditorRef={setMarkdownEditorRef}
             onLayoutReady={markMarkdownPreviewLayoutReady}
             path={annotation.metadata.path}
@@ -4342,6 +4397,7 @@ export function ReviewCodeView({
       itemMetadata,
       keymap,
       markMarkdownPreviewLayoutReady,
+      markdownPreviewHeights,
       markImagePreviewLayoutReady,
       markCommentLayoutChanged,
       onAskCodex,
@@ -4355,6 +4411,7 @@ export function ReviewCodeView({
       replyToThread,
       setMarkdownEditorRef,
       source,
+      sourceKey,
       supportsReviewCommentActions,
     ],
   );

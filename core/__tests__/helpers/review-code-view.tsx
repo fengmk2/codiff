@@ -8,6 +8,7 @@ import type { ChangedFile, ReviewSource } from '../../types.ts';
 export type { ReviewDiffBlock } from '../../app/components/ReviewCodeView.tsx';
 
 const codeViewMockState = vi.hoisted(() => ({
+  hiddenAnnotationItemIds: new Set<string>(),
   lastItems: [] as ReadonlyArray<CodeViewItem<unknown>>,
   lastOptions: null as Record<string, unknown> | null,
   postRenderNodes: [] as Array<HTMLElement>,
@@ -18,6 +19,7 @@ const codeViewMockState = vi.hoisted(() => ({
 export const codeViewMock = codeViewMockState;
 
 export const resetCodeViewMock = () => {
+  codeViewMock.hiddenAnnotationItemIds.clear();
   codeViewMock.lastItems = [];
   codeViewMock.lastOptions = null;
   codeViewMock.postRenderNodes = [];
@@ -134,7 +136,9 @@ vi.mock('@pierre/diffs/react', async () => {
             customHeader == null
               ? null
               : React.createElement('div', { slot: 'header-custom' }, customHeader),
-            'annotations' in item && Array.isArray(item.annotations)
+            !codeViewMock.hiddenAnnotationItemIds.has(item.id) &&
+              'annotations' in item &&
+              Array.isArray(item.annotations)
               ? item.annotations.map((annotation, index) =>
                   React.createElement(
                     React.Fragment,

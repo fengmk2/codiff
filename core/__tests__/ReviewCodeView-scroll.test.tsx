@@ -34,6 +34,7 @@ const markdownEditorMock = vi.hoisted(() => ({
   heightByAriaLabel: new Map<string, number>(),
   heightReportLimit: Number.POSITIVE_INFINITY,
   heightReports: 0,
+  loadingPaths: new Set<string>(),
 }));
 
 vi.mock('../app/components/MarkdownDocumentEditor.tsx', async () => {
@@ -41,12 +42,26 @@ vi.mock('../app/components/MarkdownDocumentEditor.tsx', async () => {
 
   return {
     RepositoryMarkdownEditor: React.forwardRef(function MockRepositoryMarkdownEditor(
-      { path }: { path: string },
+      { onHeightChange, path }: { onHeightChange?: (height: number) => void; path: string },
       ref: React.ForwardedRef<{ flush: () => Promise<boolean> }>,
     ) {
       React.useImperativeHandle(ref, () => ({
         flush: markdownEditorMock.flush,
       }));
+      const [loading, setLoading] = React.useState(() => markdownEditorMock.loadingPaths.has(path));
+      React.useEffect(() => {
+        const finishLoading = () => setLoading(markdownEditorMock.loadingPaths.has(path));
+        window.addEventListener('markdown-loaded', finishLoading);
+        return () => window.removeEventListener('markdown-loaded', finishLoading);
+      }, [path]);
+      React.useEffect(() => {
+        if (!loading) {
+          onHeightChange?.(markdownEditorMock.heightByAriaLabel.get(`Edit ${path}`) ?? 100);
+        }
+      }, [loading, onHeightChange, path]);
+      if (loading) {
+        return <div className="codiff-markdown-editor-message">Loading…</div>;
+      }
       return <div aria-label={`Edit ${path}`}>Markdown editor</div>;
     }),
   };
@@ -117,6 +132,7 @@ beforeEach(() => {
   markdownEditorMock.heightByAriaLabel.clear();
   markdownEditorMock.heightReportLimit = Number.POSITIVE_INFINITY;
   markdownEditorMock.heightReports = 0;
+  markdownEditorMock.loadingPaths.clear();
 });
 
 const getCodeViewItemVersion = (id: string) =>
@@ -1371,6 +1387,109 @@ test('read-only markdown previews trigger CodeView layout remeasurement after he
   await waitFor(() => {
     expect(getCodeViewItemVersion(markdownItemId)).not.toBe(initialMarkdownVersion);
   });
+  const measuredVersion = getCodeViewItemVersion(markdownItemId);
+  await act(async () => {
+    markdownPreview?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+  });
+  expect(getCodeViewItemVersion(markdownItemId)).toBe(measuredVersion);
+});
+
+test('recycled Markdown previews retain their measured height during layout-only updates', async () => {
+  await preloadHighlighter({ langs: ['text'], themes: ['github-dark'] });
+  const file = createLoadedMarkdownFile('# Long document\n', 'markdown-recycling');
+  const props = {
+    files: [file],
+    initialMarkdownPreviewSectionIds: new Set(['plan.md:unstaged']),
+    isReadOnly: true,
+  };
+  await using app = await renderReact(<ReviewCodeViewHarness {...props} />);
+
+  // jsdom has no layout. Supply the browser measurement of a tall annotation,
+  // but use Pierre's real renderer and height cache throughout this test.
+  const getRect = HTMLElement.prototype.getBoundingClientRect;
+  using _geometry = vi
+    .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    .mockImplementation(function (this: HTMLElement) {
+      return this.hasAttribute('data-line-annotation')
+        ? new DOMRect(0, 0, 900, 5000)
+        : getRect.call(this);
+    });
+  const container = document.createElement('div');
+  container.className = 'code-view';
+  document.body.append(container);
+  const viewer = new CodeView<unknown>({
+    disableErrorHandling: true,
+    renderAnnotation: () => document.createElement('div'),
+    theme: 'github-dark',
+    themeType: 'dark',
+  });
+  try {
+    viewer.setup(container);
+    viewer.setItems(codeViewMock.lastItems);
+    viewer.render(true);
+    const rendered = viewer.getRenderedItems()[0];
+    if (rendered?.type !== 'file') {
+      throw new Error('Expected a Markdown preview file.');
+    }
+    const height = rendered.instance.getVirtualizedHeight();
+    expect(height).toBeGreaterThan(5000);
+
+    // CodeView recycles the DOM when the document leaves its render window.
+    rendered.instance.cleanUp(true);
+    await act(async () => {
+      app.container
+        .querySelector('[aria-label="Preview plan.md"]')
+        ?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+    });
+    const next = codeViewMock.lastItems.find(({ id }) => id === rendered.id);
+    if (next?.type !== 'file') {
+      throw new Error('Expected the updated preview item.');
+    }
+    expect(next.version).not.toBe(rendered.version);
+    expect(rendered.instance.updateCodeViewLayout(next.file, 0, undefined, next.annotations)).toBe(
+      height,
+    );
+  } finally {
+    viewer.cleanUp();
+    container.remove();
+  }
+});
+
+test('Markdown previews reserve their last measured height while a recycled editor loads', async () => {
+  const file = createLoadedMarkdownFile('# Document\n', 'markdown-loading');
+  const itemId = 'diff:plan.md:unstaged';
+  markdownEditorMock.heightByAriaLabel.set('Edit plan.md', 5000);
+  await using app = await renderReact(<ReviewCodeViewHarness files={[file]} />);
+  const rerender = () => app.rerender(<ReviewCodeViewHarness files={[file]} />);
+  const remountLoadingEditor = async () => {
+    codeViewMock.hiddenAnnotationItemIds.add(itemId);
+    await rerender();
+    markdownEditorMock.loadingPaths.add('plan.md');
+    codeViewMock.hiddenAnnotationItemIds.delete(itemId);
+    await rerender();
+  };
+
+  await remountLoadingEditor();
+  expect(app.container.querySelector('.codiff-markdown-editor-message')?.textContent).toBe(
+    'Loading…',
+  );
+  expect(
+    app.container.querySelector('.codiff-markdown-preview')?.parentElement?.style.minHeight,
+  ).toBe('5000px');
+
+  // Once ready, a genuinely shorter document must be allowed to shrink.
+  markdownEditorMock.heightByAriaLabel.set('Edit plan.md', 2000);
+  markdownEditorMock.loadingPaths.clear();
+  await act(async () => {
+    window.dispatchEvent(new Event('markdown-loaded'));
+  });
+  expect(
+    app.container.querySelector('.codiff-markdown-preview')?.parentElement?.style.minHeight,
+  ).toBe('');
+  await remountLoadingEditor();
+  expect(
+    app.container.querySelector('.codiff-markdown-preview')?.parentElement?.style.minHeight,
+  ).toBe('2000px');
 });
 
 test('source description remains visible when a review has no diff items', async () => {
