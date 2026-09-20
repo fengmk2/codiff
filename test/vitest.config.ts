@@ -1,6 +1,6 @@
 import { fileURLToPath } from 'node:url';
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-plugin';
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from 'vite-plus';
 
 export default defineConfig({
   plugins: [
@@ -26,6 +26,10 @@ export default defineConfig({
     })),
   ],
   test: {
+    // Vitest v4 compatibility: preserve mock call history.
+    // Remove after tests no longer rely on calls from setup or earlier tests.
+    // https://vitest.dev/guide/migration/#clearmocks-is-enabled-by-default
+    clearMocks: false,
     include: ['**/*.integration.ts'],
     setupFiles: ['./setup.cloudflare.ts'],
   },
