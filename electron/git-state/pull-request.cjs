@@ -292,6 +292,12 @@ const runGhApi = async (repoRoot, args, input) => {
 
     child.stdout.on('data', (chunk) => stdout.push(chunk));
     child.stderr.on('data', (chunk) => stderr.push(chunk));
+    child.stdin.on('error', (error) => {
+      // gh can exit before reading input; report its exit status and stderr.
+      if (/** @type {NodeJS.ErrnoException} */ (error).code !== 'EPIPE') {
+        reject(error);
+      }
+    });
     child.on('error', (error) => reject(error.code === 'ENOENT' ? createGhNotFoundError() : error));
     child.on('close', (code) =>
       resolve({

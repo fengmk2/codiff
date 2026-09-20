@@ -114,6 +114,56 @@ test('reports a missing GitHub CLI when the resolved executable cannot be spawne
   ).rejects.toThrow('GitHub support requires gh');
 });
 
+test('reports the GitHub CLI error when it exits before reading the request body', async () => {
+  await using directory = await createTemporaryDirectory('codiff-gh-early-exit-');
+  const repo = join(directory.path, 'repo');
+  const fakeGh = join(directory.path, 'gh');
+
+  await mkdir(repo);
+  await execFileAsync('git', ['-C', repo, 'init']);
+  await execFileAsync('git', [
+    '-C',
+    repo,
+    'remote',
+    'add',
+    'origin',
+    'git@github.com:nkzw-tech/codiff.git',
+  ]);
+  await writeFile(
+    fakeGh,
+    `#!/bin/sh
+for arg in "$@"; do
+  if [ "$arg" = 'repos/nkzw-tech/codiff/pulls/12' ]; then
+    printf '%s' '{"head":{"sha":"0123456789abcdef0123456789abcdef01234567"}}'
+    exit 0
+  fi
+done
+printf '%s' 'gh: authentication required' >&2
+exit 4
+`,
+  );
+  await chmod(fakeGh, 0o755);
+
+  await using _environment = createTemporaryEnvironment({
+    CODIFF_GH_PATH: fakeGh,
+    SHELL: undefined,
+  });
+
+  await expect(
+    submitPullRequestReview(repo, {
+      // Exceed the pipe buffer so the child exits while input is still pending.
+      body: 'General feedback.'.repeat(128 * 1024),
+      comments: [],
+      event: 'COMMENT',
+      source: {
+        provider: 'github',
+        type: 'pull-request',
+        url: 'https://github.com/nkzw-tech/codiff/pull/12',
+      },
+    }),
+  ).rejects.toThrow('gh: authentication required');
+});
+
 test('reaches the GitHub CLI when it is not on PATH', async () => {
   await using directory = await createTemporaryDirectory('codiff-gh-off-path-');
   const repo = join(directory.path, 'repo');
