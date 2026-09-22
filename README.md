@@ -293,6 +293,12 @@ vp build
 Run `vpr test:integration` to build and test the public sharing service in the local
 Cloudflare Workers runtime. The `test` workspace uses Vitest 4.1 for compatibility
 with `@cloudflare/vitest-plugin`; the main test suite uses Vitest 5.
+Keep the Workers suite's `vitest` imports and version pin when running `vp migrate`;
+it must not use the main suite's `vite-plus/test` runner or a workspace-wide Vitest override.
+
+The toolchain uses the Vite+ 1.0 preview from [PR #2551](https://github.com/voidzero-dev/vite-plus/pull/2551).
+The catalog pins the preview, and `.npmrc` enables its registry. Use the Node.js version in
+`.node-version` for development and tests.
 
 ## Contributing
 

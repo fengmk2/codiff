@@ -26,6 +26,7 @@ export default defineConfig({
     })),
   ],
   test: {
+    clearMocks: true,
     include: ['**/*.integration.ts'],
     setupFiles: ['./setup.cloudflare.ts'],
   },
