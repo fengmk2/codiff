@@ -291,6 +291,18 @@ const fateOperation = async (
     }),
   );
 
+const queryShare = (name: 'planBySlug' | 'walkthroughBySlug', slug: string, cookie?: string) =>
+  fateOperation(
+    {
+      args: { slug },
+      id: `${name}-delete-capability`,
+      kind: 'query',
+      name,
+      select: ['canDelete', 'commentThreads.id', 'id'],
+    },
+    { cookie },
+  );
+
 const claimIntent = async (intent: UploadIntent, cookie: string) => {
   const result = await fateOperation(
     {
@@ -928,18 +940,6 @@ test('allows only share owners to delete plans and walkthroughs', async () => {
   const otherCookie = await signInWithGitHub(grace);
   const sharedPlan = await createAndUpload(ownerCookie, 'plan');
   const sharedWalkthrough = await createAndUpload(ownerCookie, 'walkthrough');
-
-  const queryShare = (name: 'planBySlug' | 'walkthroughBySlug', slug: string, cookie?: string) =>
-    fateOperation(
-      {
-        args: { slug },
-        id: `${name}-delete-capability`,
-        kind: 'query',
-        name,
-        select: ['canDelete', 'commentThreads.id', 'id'],
-      },
-      { cookie },
-    );
 
   expect((await queryShare('planBySlug', sharedPlan.slug)).results[0]).toMatchObject({
     data: { canDelete: false },
