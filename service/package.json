@@ -19,7 +19,7 @@
   ],
   "type": "module",
   "main": "./dist/index.mjs",
-  "types": "./dist/index.d.ts",
+  "types": "./index.ts",
   "exports": {
     ".": {
       "types": "./index.ts",

@@ -5,7 +5,8 @@ import babel from '@rolldown/plugin-babel';
 import react, { reactCompilerPreset } from '@vitejs/plugin-react';
 import { defineConfig } from 'vite-plus';
 
-const testWorkers = Math.max(1, Math.min(4, Math.floor(availableParallelism() / 6)));
+// Node PTY process tests need room to spawn child processes during the full suite.
+const testWorkers = Math.max(1, Math.min(2, Math.floor(availableParallelism() / 6)));
 
 export default defineConfig({
   base: './',

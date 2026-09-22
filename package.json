@@ -75,11 +75,10 @@
     "react-dom": "^19.3.0",
     "typescript": "^7.0.2",
     "vite": "catalog:",
-    "vite-plus": "catalog:",
-    "vitest": "catalog:"
+    "vite-plus": "catalog:"
   },
   "engines": {
-    "node": ">=23.0.0",
+    "node": "^24.11.0 || >=26.0.0",
     "pnpm": ">=12.0.0"
   },
   "packageManager": "pnpm@12.3.4",
